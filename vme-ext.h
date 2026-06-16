@@ -4,11 +4,21 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 m-c/d, mcidclan
 
+#define VME_TOP_BUFFER_0 (VME_TOP_BUFFERS + 8192*0)
+#define VME_TOP_BUFFER_1 (VME_TOP_BUFFERS + 8192*1)
+#define VME_TOP_BUFFER_2 (VME_TOP_BUFFERS + 8192*2)
+#define VME_TOP_BUFFER_3 (VME_TOP_BUFFERS + 8192*3)
+
+#define VME_BASE_BUFFER_0 (VME_BASE_BUFFERS + 8192*0)
+#define VME_BASE_BUFFER_1 (VME_BASE_BUFFERS + 8192*1)
+#define VME_BASE_BUFFER_2 (VME_BASE_BUFFERS + 8192*2)
+#define VME_BASE_BUFFER_3 (VME_BASE_BUFFERS + 8192*3)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-static inline void setPadded4x4(void* const dst, const unsigned int* const data) {
+static inline void vmeExt_setPadded4x4(void* const dst, const void* const data) {
   
   asm volatile (
     ".set push;"
@@ -26,8 +36,25 @@ static inline void setPadded4x4(void* const dst, const unsigned int* const data)
     
     ".set pop;"
     :
-    : "r"(dst), "r"(mat)
+    : "r"(dst), "r"(data)
     : "$t0","$t1","$t2","$t3","$t4","$t5","$t6","$t7","$t8","$t9", "memory"
+  );
+}
+
+static inline void vmeExt_setWord4(void* const dst, const void* const data) {
+  
+  asm volatile (
+    ".set push;"
+    ".set noreorder;"
+    
+    "move $t8, %0; move $t9, %1;"
+    "lw $t0, 0($t9); lw $t1, 4($t9); lw $t2, 8($t9); lw $t3, 12($t9);"
+    "sw $t0, 0($t8); sw $t1, 4($t8); sw $t2, 8($t8); sw $t3, 12($t8);"
+    
+    ".set pop;"
+    :
+    : "r"(dst), "r"(data)
+    : "$t0","$t1","$t2","$t3","$t8","$t9", "memory"
   );
 }
 
