@@ -18,7 +18,20 @@
 extern "C" {
 #endif
 
-static inline void vmeExt_setPadded4x4(void* const dst, const void* const data) {
+typedef struct {
+  u32 x, y, z, w;
+} __attribute__((aligned(16))) vmeExtVec4u32;
+
+typedef struct {
+  vmeExtVec4u32 x, y, z, w;
+} __attribute__((aligned(16))) vmeExtMat4x4u32;
+
+typedef struct {
+  vmeExtVec4u32 row;
+} __attribute__((aligned(16))) vmeExtRow4u32;
+
+
+static inline void vmeExtSetPadded4x4(void* const dst, const void* const data) {
   
   asm volatile (
     ".set push;"
@@ -41,7 +54,7 @@ static inline void vmeExt_setPadded4x4(void* const dst, const void* const data) 
   );
 }
 
-static inline void vmeExt_setWord4(void* const dst, const void* const data) {
+static inline void vmeExtSetWord4(void* const dst, const void* const data) {
   
   asm volatile (
     ".set push;"

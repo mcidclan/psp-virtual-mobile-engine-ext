@@ -9,10 +9,12 @@ PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 
-meLibSetSharedUncached32(2);
+#define VME_DEBUG_BUFFER_WORD_COUNT 32
+
+meLibSetSharedUncached32(10);
 #define meExit       (meLibSharedMemory[0])
 #define meCounter    (meLibSharedMemory[1])
-#define sharedIdx    (meLibSharedMemory[1])
+#define sharedIdx    (meLibSharedMemory[2])
 
 volatile u32* sharedMat __attribute__((aligned(64))) = nullptr;
 volatile u32* sharedVec __attribute__((aligned(64))) = nullptr;
@@ -26,19 +28,30 @@ void meLibOnProcess(void) {
   vmeLibEnable();
   vmeLibWipe();
   
-  vmeExt_setPadded4x4((void*)VME_TOP_BUFFER_0, (void*)sharedMat);
+  vmeExtSetPadded4x4((void*)VME_TOP_BUFFER_0, (void*)sharedMat);
 
-  const u32* const vector = (const u32* const)sharedVec[sharedIdx * 4];
-  vmeExt_setWord4((void*)VME_TOP_BUFFER_1, (void*)vector);
+  const void* const vector = (const void* const)(&sharedVec[sharedIdx * 4]);
+  vmeExtSetWord4((void*)VME_TOP_BUFFER_1, vector);
 
   vmeLibStart();
-  
+
+  vme_icn(INPUT, 0x0010);
   vme_icn(FLOW, VME_DEF_MAPPER);
   vme_icn(ARCH, VME_DEF_MAPPER);
-  
-  // todo:
-  
+  vme_set(ENABLE, FU_1, 0x80000000);
+
+  // duplicate rows
+  vme_pe0(vme_fu(PRIMARY), 0x06008000);
+  vme_pe0(vme_fu(SECONDARY), 0x04010000);
+  vme_pe0(agu_top(MODE), VME_DEF_MODE);
+  vme_pe0(agu_top(COUNT), VME_DEF_STEP, 32 - 1);
+  vme_pe0(agu_write(MODE), VME_DEF_MODE, 0x60000);
+  vme_pe0(agu_write(COUNT), VME_DEF_STEP, 32 - 1);
+  //
   vmeLibFinish();
+  
+  // debug
+  vmeDebugFillWith(VME_BASE_BUFFERS, VME_DEBUG_BUFFER_WORD_COUNT);
   vmeLibDisable();
   
   while (1) {
@@ -58,7 +71,7 @@ void meLibOnProcess(void) {
   }
 }
 
-void updateFactor(SceCtrlData* const ctl) {
+void updateVector(SceCtrlData* const ctl) {
   
   static bool up = false;
   
@@ -82,11 +95,22 @@ void updateFactor(SceCtrlData* const ctl) {
 
 int main() {
   
-  scePowerSetClockFrequency(333, 333, 166);
+  vmeDebugSetupBuffers(VME_DEBUG_BUFFER_WORD_COUNT);
   
+  scePowerSetClockFrequency(333, 333, 166);
+
   meLibGetUncached32(sharedMat, 16); // 4x4 mat
   meLibGetUncached32(sharedVec, 16); // array of 4 input vectors
   meLibGetUncached32(sharedRes, 4); // output/resulted vector
+
+  vmeExtMat4x4u32* const mat = (vmeExtMat4x4u32*)sharedMat;
+  mat->x = {0x00, 0x01, 0x02, 0x03};
+  mat->y = {0x04, 0x05, 0x06, 0x07};
+  mat->z = {0x08, 0x09, 0x0a, 0x0b};
+  mat->w = {0x0c, 0x0d, 0x0e, 0x0f};
+
+  vmeExtRow4u32* const vec = (vmeExtRow4u32*)sharedVec;
+  vec->row = {0x01, 0x02, 0x03, 0x04};
 
   meLibDefaultInit();
   
@@ -95,6 +119,7 @@ int main() {
   do {
     
     sceCtrlPeekBufferPositive(&ctl, 1);
+    updateVector(&ctl);
     
     const u32* const mat = (u32*)sharedMat;
     const u32* const in = (u32*)&(sharedVec[sharedIdx * 4]);
@@ -128,10 +153,16 @@ int main() {
     
     sceDisplayWaitVblank();
     
-  } while (!(ctl.Buttons & PSP_CTRL_HOME));
+  } while (!(ctl.Buttons & PSP_CTRL_HOME) && 0);
+  
+  sceKernelDelayThread(100000);
+  
+  vmeDebugTouch();
+  vmeDebugDumpBuffers();
   
   meLibFreeUncached32(sharedMat);
   meLibFreeUncached32(sharedVec);
+  vmeDebugFreeBuffers();
   
   sceKernelExitGame();
   return 0;
