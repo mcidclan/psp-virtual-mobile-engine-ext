@@ -21,7 +21,7 @@ volatile u32* sharedVec __attribute__((aligned(64))) = nullptr;
 volatile u32* sharedRes __attribute__((aligned(64))) = nullptr;
 
 void meLibOnProcess(void) {
-  
+
   meCoreDcacheWritebackInvalidateAll();
   meLibExceptionHandlerInit(0);
   
@@ -31,27 +31,90 @@ void meLibOnProcess(void) {
   vmeExtSetPadded4x4((void*)VME_TOP_BUFFER_0, (void*)sharedMat);
 
   const void* const vector = (const void* const)(&sharedVec[sharedIdx * 4]);
-  vmeExtSetWord4((void*)VME_TOP_BUFFER_1, vector);
+  vmeExtSetWord4((void*)VME_TOP_BUFFER_2, vector);
 
   vmeLibStart();
-
-  vme_icn(INPUT, 0x0010);
+  
+  // configure the interconnect
+  vme_icn(INPUT, 0x3210);
   vme_icn(FLOW, VME_DEF_MAPPER);
   vme_icn(ARCH, VME_DEF_MAPPER);
-  vme_set(ENABLE, FU_1, 0x80000000);
+  vme_set(ENABLE, FU_1, 0b0000 << 28);
 
-  // duplicate rows
-  vme_pe0(vme_fu(PRIMARY), 0x06008000);
-  vme_pe0(vme_fu(SECONDARY), 0x04010000);
+  /*
+   * FIRST STEP
+   * */
+  
+  // read TOP_0
   vme_pe0(agu_top(MODE), VME_DEF_MODE);
   vme_pe0(agu_top(COUNT), VME_DEF_STEP, 32 - 1);
+  
+  // READ TOP_2 (vector) and repeat the first 4 words
+  vme_pe2(agu_top(MODE), 0x84000000);
+  vme_pe2(agu_top(COUNT), VME_DEF_STEP, 4 - 1);
+  vme_pe2(agu_top(INNER_0), 0x00030001);
+  vme_pe2(agu_top(FORMAT_0), 0x00020000);
+  
+  // (TOP_0 x TOP_2)
+  vme_pe0(vme_fu(PRIMARY), 0x20200000);
+  
+  // write the result to BASE_0 scratchpad
   vme_pe0(agu_write(MODE), VME_DEF_MODE, 0x60000);
   vme_pe0(agu_write(COUNT), VME_DEF_STEP, 32 - 1);
-  //
+  
+  /*
+   * SECOND STEP
+   * */
+     
+  // -(TOP_0 x TOP_2)
+  vme_pe1(vme_fu(PRIMARY), 0x20208000);
+  
+  // write the result to BASE_1 scratchpad
+  vme_pe1(agu_write(MODE), VME_DEF_MODE, 0x60000);
+  vme_pe1(agu_write(COUNT), VME_DEF_STEP, 32 - 1);
+  
+  /*
+   * THIRD STEP
+   * */
+   
+  // read BASE_0
+  vme_pe0(agu_base(MODE), VME_DEF_MODE, 0x80000);
+  vme_pe0(agu_base(COUNT), VME_DEF_STEP, 32 - 1);
+
+  // read BASE_1
+  vme_pe1(agu_base(MODE), VME_DEF_MODE, 0xc0000);
+  vme_pe1(agu_base(COUNT), VME_DEF_STEP, 32 - 1);
+    
+  // (BASE_0 + BASE_1)
+  vme_pe2(vme_fu(PRIMARY), 0x52010000);
+  
+  // write the result to BASE_2 scratchpad
+  vme_pe2(agu_write(MODE), VME_DEF_MODE, 0xe0000);
+  vme_pe2(agu_write(COUNT), VME_DEF_STEP, 32 - 1);
+  
+  
+  /*
+   * LAST STEP
+   * */
+   
+  // read BASE_2
+  vme_pe2(agu_base(MODE), VME_DEF_MODE, 0xf0000);
+  vme_pe2(agu_base(COUNT), VME_DEF_STEP, 32 - 1);
+    
+  // (BASE_0 + BASE_1)
+  vme_pe3(vme_fu(PRIMARY), 0x03250000);
+  //vme_pe3(vme_fu(PRIMARY), 0x03004000);
+  
+  // write the result to BASE_2 scratchpad
+  vme_pe3(agu_write(MODE), VME_DEF_MODE, 0x150000);
+  vme_pe3(agu_write(COUNT), VME_DEF_STEP, 32 - 1);
+  
+  
   vmeLibFinish();
   
   // debug
-  vmeDebugFillWith(VME_BASE_BUFFERS, VME_DEBUG_BUFFER_WORD_COUNT);
+  vmeDebugFillWith(VME_BASE_BUFFERS, VME_DEBUG_BUFFER_WORD_COUNT);  
+  
   vmeLibDisable();
   
   while (1) {
@@ -128,7 +191,7 @@ int main() {
     pspDebugScreenSetXY(0, 0);
     pspDebugScreenPrintf("Current 4x4 Matrix:");
     
-    for(int i = 0; i < 8; i++) {
+    for(int i = 0; i < 4; i++) {
       
       const int off = i * 4;
       pspDebugScreenSetXY(0, i+2);
@@ -153,7 +216,7 @@ int main() {
     
     sceDisplayWaitVblank();
     
-  } while (!(ctl.Buttons & PSP_CTRL_HOME) && 0);
+  } while (!(ctl.Buttons & PSP_CTRL_HOME));
   
   sceKernelDelayThread(100000);
   
