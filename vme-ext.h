@@ -71,6 +71,23 @@ static inline void vmeExtSetWord4(void* const dst, const void* const data) {
   );
 }
 
+static inline void vmeExtGetWord4FromPaddedMac(const void* const data, void* const dst) {
+  
+  asm volatile (
+    ".set push;"
+    ".set noreorder;"
+    
+    "move $t8, %0; move $t9, %1;"
+    "lw $t0, 28($t9); lw $t1, 60($t9); lw $t2, 92($t9); lw $t3, 124($t9);"
+    "sw $t0, 0($t8); sw $t1, 4($t8); sw $t2, 8($t8); sw $t3, 12($t8);"
+    
+    ".set pop;"
+    :
+    : "r"(dst), "r"(data)
+    : "$t0","$t1","$t2","$t3","$t8","$t9", "memory"
+  );
+}
+
 #ifdef __cplusplus
 }
 #endif
