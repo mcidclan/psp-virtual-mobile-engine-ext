@@ -1,10 +1,6 @@
 ## VME, Switching RAM Context
 
-A sample code demonstrating how to handle and switch between VME contexts from main RAM.
-
-## Usage
-
-Use Triangle or Cross to change the current context.
+A sample code demonstrating how to load and switch between VME contexts from main RAM. The contexts are placed in RAM, then loaded into the VME using the primary ME DMAC. Each next context is loaded while the previous one is still executing, pipelining context loads to accelerate the execution of successive different contexts.
 
 ## Disclamer
 

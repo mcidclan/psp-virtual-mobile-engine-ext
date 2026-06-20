@@ -8,8 +8,7 @@ PSP_HEAP_SIZE_KB(-1024);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
-
-#define VME_DEBUG_BUFFER_WORD_COUNT 32
+VME_DEBUG_SET_BUFFER_WORD_COUNT(32);
 
 meLibSetSharedUncached32(10);
 #define meExit       (meLibSharedMemory[0])
@@ -129,7 +128,7 @@ void meLibOnProcess(void) {
   vmeExtGetWord4FromPaddedMac((void*)VME_BASE_BUFFER_3, (void*)sharedRes);
 
   // debug
-  vmeDebugFillWith((VME_BASE_BUFFERS), VME_DEBUG_BUFFER_WORD_COUNT);
+  vmeDebugFillWith(VME_BASE_BUFFERS);
   vmeLibDisable();
   
   lastIdx = sharedIdx;
@@ -150,7 +149,7 @@ void meLibOnProcess(void) {
       vmeExtGetWord4FromPaddedMac((void*)VME_BASE_BUFFER_3, (void*)sharedRes);
       
       // debug
-      vmeDebugFillWith((VME_BASE_BUFFERS), VME_DEBUG_BUFFER_WORD_COUNT);
+      vmeDebugFillWith(VME_BASE_BUFFERS);
       vmeLibDisable();
       
       lastIdx = sharedIdx;
@@ -272,7 +271,7 @@ void displayData(const int x, const int y) {
 int main() {
   
   scePowerSetClockFrequency(333, 333, 166);
-  vmeDebugSetupBuffers(VME_DEBUG_BUFFER_WORD_COUNT);
+  vmeDebugSetupBuffers();
   setupData();
 
   meLibDefaultInit();

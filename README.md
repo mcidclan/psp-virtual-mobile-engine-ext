@@ -26,8 +26,8 @@ All code submitted to this repository must be compatible with the MIT License. D
 This project and code are provided as-is without warranty. Users assume full responsibility for any implementation or consequences. Use at your own discretion and risk
 
 ## Related work
-[PSP Media Engine Custom Core](https://github.com/mcidclan/psp-media-engine-custom-core)  
 [PSP Media Engine Cracking The Unknown](https://github.com/mcidclan/psp-media-engine-cracking-the-unknown)  
+[PSP Media Engine Custom Core](https://github.com/mcidclan/psp-media-engine-custom-core)  
 [PSP Media Engine Safe Task](https://github.com/mcidclan/psp-media-engine-safe-task)  
 [PSP Media Engine Reload](https://github.com/mcidclan/psp-media-engine-reload)  
 
