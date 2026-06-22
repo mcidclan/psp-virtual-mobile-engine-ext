@@ -1,4 +1,4 @@
-## VME, Mat4x4 Multiplied by Vector
+## VME, Mat4x4 Multiplied by Vector: Resetting the Accumulator
 
 A sample code demonstrating one way to multiply a vector by a 4x4 matrix using the Virtual Mobile Engine in linear addressing mode, as possible higher-dimensional addressing modes remain unknown for now.
 
