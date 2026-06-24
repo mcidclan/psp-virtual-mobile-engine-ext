@@ -1,6 +1,6 @@
 ## VME, Saturator, Clamp and Secondary FUs
 
-This sample code shows how to use the saturator paired with the clamp on the secondary FUs, so that output values fall within the range [0, 63]. This could also be achieved without the saturator, using only the clamping opcode, but it is intentionally implemented this way for demonstration purposes.  
+This sample code shows how to use the saturator paired with a clamp on the secondary FUs, so that output values fall within the range [0, 63]. This could also be achieved without the saturator, using only one of the clamping opcode, but it is intentionally implemented this way for demonstration purposes.  
 
 ## Disclamer
 
