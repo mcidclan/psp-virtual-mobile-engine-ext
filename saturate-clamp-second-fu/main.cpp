@@ -61,10 +61,10 @@ void runContext() {
   // enable all secondary FUs
   vme_set(ENABLE, FU_1, 0x0f << 28);
   // configure interconnect with same params for each top READ and WRITE AGUs (0)
-  // configure interconnect for base READ AGUs, 1, 2 and 3 not configured.
   vme_icn(AGU_TOP, 0);
-  vme_icn(AGU_BASE, 0x4440);
   vme_icn(AGU_WRITE, 0);
+  // configure interconnect for base READ AGUs, 1, 2 and 3 not configured.
+  vme_icn(AGU_BASE, 0x4440);
   
   const int count = 16 - 1;
   const int sat = 7 << 7;
