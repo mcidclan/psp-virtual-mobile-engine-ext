@@ -158,10 +158,11 @@ void endThread(int* ended, const int thid) {
 int main() {
   
   scePowerSetClockFrequency(333, 333, 166);
+  Uncached32* const uvar = loadBinary("./model.bin");
+  
   vmeDebugSetupBuffers();
-
-  meLibDefaultInit();
   pspDebugScreenInit();
+  meLibDefaultInit();
   
   startThread();
   
@@ -208,6 +209,7 @@ int main() {
   vmeDebugDumpBuffers();
   vmeDebugFreeBuffers();
   
+  unloadBinary(uvar);
   sceKernelExitGame();
   return 0;
 }
