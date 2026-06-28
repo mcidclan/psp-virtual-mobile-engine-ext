@@ -1,12 +1,8 @@
 ## VME Pico AI PoC
 
-## test
-```bash
-python fake_gen.py
-python train.py dataset.bin model.bin
-```
+## Pipelines and Architecture
 
-## Pipelines and Architecture 
+The following are the main main features and goals  
 
 ## Recorder (PSP side)
 
@@ -32,20 +28,21 @@ python train.py dataset.bin model.bin
   - [x] buffer resets automatically after successful save for next 8 recordings
 - [x] each entry written : 32-bit label + 128 signed char (64 x + 64 y)
 
+
 ## Trainer (PC side)
 
-- [ ] load dataset from binary file
-  - [ ] each entry is a 32-bit label followed by 128 x 32-bit words
-  - [ ] input values are signed char centered on 0 (PSP joystick 0..255 minus 128), packed in 32-bit words
-- [ ] initialize W1 (128 x 4) and W2 (4 x 4) with small random values
-- [ ] for each epoch :
-  - [ ] forward pass : MAC over 128 inputs -> ReLU -> MAC over 4 features -> softmax
-  - [ ] compute cross entropy loss between predicted scores and true labels
-  - [ ] backward pass : compute gradients for W1 and W2
-  - [ ] update W1 and W2 by gradient descent
-- [ ] export model to binary file :
-  - [ ] 4 buffers of 128 weights (W1, hidden layer), signed 24-bit packed in 32-bit words
-  - [ ] 4 buffers of 4 weights (W2, output layer), signed 24-bit packed in 32-bit words
+- [x] load dataset from binary file, supports multiple files
+  - [x] each entry is a 32-bit label followed by 128 signed chars (64 x + 64 y)
+  - [x] input values are signed char centered on 0 (PSP joystick 0..255 minus 128), normalized to float32 / 128.0
+- [x] initialize W1 (128 x 4) and W2 (4 x 4) with small random values (randn * 0.01)
+- [x] for each epoch :
+  - [x] forward pass : MAC over 128 inputs -> ReLU -> MAC over 4 features -> softmax
+  - [x] compute cross entropy loss between predicted scores and true labels
+  - [x] backward pass : compute gradients for W1 and W2
+  - [x] update W1 and W2 by gradient descent
+- [x] export model to binary file :
+- [x] 4 buffers of 128 weights (W1, hidden layer), float quantized to int8 range (* 128, clip -128..127), stored as 24-bit two's complement in 32-bit words
+- [x] 4 buffers of 4 weights (W2, output layer), float quantized to int8 range (* 128, clip -128..127), stored as 24-bit two's complement in 32-bit words
 
 
 ## Detector (PSP side, CGRA)
@@ -77,6 +74,19 @@ python train.py dataset.bin model.bin
 - [ ] outputs 4 combo scores to scratchpad output buffer
 - [ ] pick the highest score index as the detected combo (0=combo1, 1=combo2, 2=combo3, 3=combo4)
 
+
+## usage
+
+### recording
+Use the recorder app on PSP to generate sample.NN.bin files, either copied from the memory stick or written directly to PC via psplink.
+
+### training
+```bash
+python train.py model.bin sample.*.bin
+```
+
+## Combo Group Examples
+See [Combo Groups](combo-groups.md)
 
 ## Disclamer
 

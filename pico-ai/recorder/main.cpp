@@ -7,9 +7,10 @@ PSP_HEAP_SIZE_KB(-1024);
 PSP_MODULE_INFO("pico-ai-recorder", 0, 1, 1);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 
-#define MAX_RECORDS  8
-#define MIN_LOCK     90
-#define CONFIG_PATH  "./sample.txt"
+#define SAMPLE_PERIOD 16667
+#define MAX_RECORDS   8
+#define MIN_LOCK      90
+#define CONFIG_PATH   "./sample.txt"
 
 typedef struct {
   int label;
@@ -20,7 +21,9 @@ Record recordBuffer[MAX_RECORDS];
 int recordCount    = 0;
 int currentLabel   = 0;
 int locked         = 0;
+int capturing      = 0;
 int currentFileIdx = 0;
+int resetRequested = 0;
 
 int readConfig() {
   
@@ -68,20 +71,32 @@ int recorder(SceSize args, void *argp) {
   sceCtrlSetSamplingCycle(0);
   sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
 
+  SceCtrlData pad;
+  u32 warmupStart = sceKernelGetSystemTimeLow();
+  while (sceKernelGetSystemTimeLow() - warmupStart < 1000000) {
+    sceCtrlPeekBufferPositive(&pad, 1);
+    sceKernelDelayThread(500);
+  }
+
   const int PRETRIG = 8;
   const int THRESHOLD = 20;
-
   int preHead = 0;
   signed char preX[8] = {0};
   signed char preY[8] = {0};
   
   int capIndex = 0;
-  int capturing = 0;
   signed char samples[128] = {0};
 
-  SceCtrlData pad;
+  u32 lastTick = sceKernelGetSystemTimeLow();
   while (!*ended) {
     
+    u32 now = sceKernelGetSystemTimeLow();
+    if (now - lastTick < SAMPLE_PERIOD) {
+      sceKernelDelayThread(500);
+      continue;
+    }
+    lastTick = now;
+
     sceCtrlPeekBufferPositive(&pad, 1);
     signed char x = (signed char)(pad.Lx - 128);
     signed char y = (signed char)(pad.Ly - 128);
@@ -94,7 +109,8 @@ int recorder(SceSize args, void *argp) {
         preY[preHead % PRETRIG] = y;
         preHead++;
         
-        if (x > THRESHOLD || x < -THRESHOLD || y > THRESHOLD || y < -THRESHOLD) {
+        if (preHead >= PRETRIG &&
+           (x > THRESHOLD || x < -THRESHOLD || y > THRESHOLD || y < -THRESHOLD)) {
           
           for (int i = 0; i < PRETRIG; i++) {
             int idx = (preHead + i) % PRETRIG;
@@ -106,6 +122,17 @@ int recorder(SceSize args, void *argp) {
         }
       }
     } else {
+      
+      if (resetRequested) {
+        capturing = 0;
+        capIndex = 0;
+        preHead = 0;
+        for (int i = 0; i < PRETRIG; i++) {
+          preX[i] = 0; preY[i] = 0;
+        }
+        resetRequested = 0;
+        continue;
+      }
       
       samples[capIndex] = x;
       samples[capIndex + 64] = y;
@@ -119,10 +146,19 @@ int recorder(SceSize args, void *argp) {
           recordBuffer[slot].samples[i] = samples[i];
         }
         recordCount++;
+        capturing = 0;
         locked = 1;
         
+        u32 lockTick = sceKernelGetSystemTimeLow();
         int lockFrames = 0;
-        while (lockFrames < MIN_LOCK && !*ended) {
+        while (lockFrames < MIN_LOCK && !*ended && !resetRequested) {
+          
+          u32 lockNow = sceKernelGetSystemTimeLow();
+          if (lockNow - lockTick < SAMPLE_PERIOD) {
+            sceKernelDelayThread(500);
+            continue;
+          }
+          lockTick = lockNow;
           
           sceCtrlPeekBufferPositive(&pad, 1);
           signed char lx = (signed char)(pad.Lx - 128);
@@ -133,19 +169,18 @@ int recorder(SceSize args, void *argp) {
           } else {
             lockFrames++;
           }
-          sceKernelDelayThread(16667);
         }
         
         locked = 0;
+        resetRequested = 0;
         preHead = 0;
         capIndex = 0;
-        capturing = 0;
         for (int i = 0; i < PRETRIG; i++) {
           preX[i] = 0; preY[i] = 0;
         }
+        lastTick = sceKernelGetSystemTimeLow();
       }
     }
-    sceKernelDelayThread(16667);
   }
   *ended = 1;
   return sceKernelExitDeleteThread(0);
@@ -203,6 +238,7 @@ int main() {
     if (pressed & PSP_CTRL_SQUARE) {
       recordCount = 0;
       locked = 0;
+      resetRequested = 1;
     }
     if (pressed & PSP_CTRL_CIRCLE) {
       if (recordCount >= MAX_RECORDS) {
@@ -228,7 +264,10 @@ int main() {
     pspDebugScreenPrintf("Remaining: %d      ", MAX_RECORDS - recordCount);
     
     pspDebugScreenSetXY(1, 8);
-    if (locked) {
+    if (capturing) {
+      pspDebugScreenPrintf("* Recording...               ");
+    }
+    else if (locked) {
       pspDebugScreenPrintf("Recording stopped, wait...   ");
     }
     else if (warningTimer > 0) {
