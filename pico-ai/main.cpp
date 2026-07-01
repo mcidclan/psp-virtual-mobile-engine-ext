@@ -10,9 +10,14 @@ PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 VME_DEBUG_SET_BUFFER_WORD_COUNT(32);
 
+#define SAMPLE_PERIOD 16667
+
+volatile int capturing   = 0;
+volatile int sampleReady = 0;
+signed char samples[128] = {0};
+
 meLibSetSharedUncached32(10);
 #define meCounter    (meLibSharedMemory[1])
-
 
 VME_LIB_CONTEXT_BUILDER(setupHiddenLayer, param, {
   
@@ -23,6 +28,7 @@ VME_LIB_CONTEXT_BUILDER(setupHiddenLayer, param, {
   // first neurone 
   vme_pe0(vme_fu(PRIMARY), 0);
 
+  const int count = 128;
   vme_pe0(agu_top(MODE), VME_DEF_MODE);
   vme_pe0(agu_top(COUNT), VME_DEF_STEP, count);
   vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6);
@@ -47,6 +53,7 @@ VME_LIB_CONTEXT_BUILDER(setupOutputLayer, param, {
   // first neurone 
   vme_pe0(vme_fu(PRIMARY), 0);
 
+  const int count = 4;
   vme_pe0(agu_top(MODE), VME_DEF_MODE);
   vme_pe0(agu_top(COUNT), VME_DEF_STEP, count);
   vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6);
@@ -63,17 +70,30 @@ void runContext() {
   vmeLibFinish();
 }
 
+//#define VME_SAMPLE_BUFFER_OFFSET (VME_TOP_BUFFERS + 1024)
+#define VME_SAMPLE_BUFFER_OFFSET (VME_TOP_BUFFERS) // tmp debug
+#define VME_SAMPLE_BUFFER_SIZE   (512)
+
 void meLibOnProcess(void) {
 
   meCoreDcacheWritebackInvalidateAll();
   meLibExceptionHandlerInit(0);
   
+  /*
   void* const hiddenLayerContext = setupHiddenLayer(nullptr);
   void* const outputLayerContext = setupOutputLayer(nullptr);
-  
+  */
   
   while (1) {
     
+    if (sampleReady) {
+      
+      meCoreMemcpy((void*)VME_SAMPLE_BUFFER_OFFSET, samples, VME_SAMPLE_BUFFER_SIZE);
+      vmeDebugFillWith(VME_BASE_BUFFERS);
+      sampleReady = 0;
+    }
+  
+    /*
     if () {
       vmeLibEnable();
       
@@ -97,52 +117,90 @@ void meLibOnProcess(void) {
       vmeDebugFillWith(VME_BASE_BUFFERS);
       vmeLibDisable();
     }
-  
+    */
+    
     meCounter += 1;
   }
 }
 
-int sampleRecorder(SceSize args, void *argp) {
-  
-  int* const stopped = (int*)*((int*)argp);
-  
-  int index = 0;
-  signed char samples[128] = {0};
-  
+int recorder(SceSize args, void *argp) {
+
+  int* const ended = (int*)*((int*)argp);
   sceCtrlSetSamplingCycle(0);
   sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-  
   SceCtrlData pad;
-  while (!*stopped) {
-    
+  u32 warmupStart = sceKernelGetSystemTimeLow();
+  while (sceKernelGetSystemTimeLow() - warmupStart < 1000000) {
     sceCtrlPeekBufferPositive(&pad, 1);
-
-    samples[index] = (signed char)(pad.Lx - 128);
-    samples[index + 64] = (signed char)(pad.Ly - 128);
-    index += 1;
-    
-    if (index >= 64) {
-      // todo process vme
-      index = 0;
-    }
-    
-    sceKernelDelayThread(1);
+    sceKernelDelayThread(500);
   }
-  *stopped = 1;
+
+  const int PRETRIG = 8;
+  const int THRESHOLD = 20;
+  int preHead = 0;
+  signed char preX[8] = {0};
+  signed char preY[8] = {0};
+
+  int capIndex = 0;
+  u32 lastTick = sceKernelGetSystemTimeLow();
+
+  while (!*ended) {
+
+    u32 now = sceKernelGetSystemTimeLow();
+    if (now - lastTick < SAMPLE_PERIOD) {
+      sceKernelDelayThread(500);
+      continue;
+    }
+    lastTick = now;
+    sceCtrlPeekBufferPositive(&pad, 1);
+    signed char x = (signed char)(pad.Lx - 128);
+    signed char y = (signed char)(pad.Ly - 128);
+
+    if (!capturing) {
+
+      preX[preHead % PRETRIG] = x;
+      preY[preHead % PRETRIG] = y;
+      preHead++;
+
+      if (!sampleReady && preHead >= PRETRIG &&
+         (x > THRESHOLD || x < -THRESHOLD || y > THRESHOLD || y < -THRESHOLD)) {
+
+        for (int i = 0; i < PRETRIG; i++) {
+          int idx = (preHead + i) % PRETRIG;
+          samples[i] = preX[idx];
+          samples[i + 64] = preY[idx];
+        }
+        capIndex = PRETRIG;
+        capturing = 1;
+      }
+    } else {
+
+      samples[capIndex] = x;
+      samples[capIndex + 64] = y;
+      capIndex++;
+
+      if (capIndex >= 64) {
+        capturing = 0;
+        capIndex = 0;
+        preHead = 0;
+        for (int i = 0; i < PRETRIG; i++) { preX[i] = 0; preY[i] = 0; }
+        sampleReady = 1;
+      }
+    }
+  }
+  *ended = 1;
   return sceKernelExitDeleteThread(0);
 }
 
-int startThread(const void* const thread, int* ended) {
+int startThread(SceKernelThreadEntry const thread, int* ended) {
   
   *ended = 0;
-  
-  int thid = sceKernelCreateThread("thread",
+  int thid = sceKernelCreateThread("pico-ai-thread",
     thread, 0x18, 0x2000, PSP_THREAD_ATTR_VFPU, 0);
-  
-  if (thid >= 0) {
     
+  if (thid >= 0) {
     int* param[1] = {ended};
-    sceKernelStartThread(thid, sizeof(int), &param);
+    sceKernelStartThread(thid, sizeof(param), &param);
   }
   return thid;
 }
@@ -164,7 +222,8 @@ int main() {
   pspDebugScreenInit();
   meLibDefaultInit();
   
-  startThread();
+  int ended;
+  int thid = startThread(recorder, &ended);
   
   SceCtrlData ctl;
   do {
@@ -210,6 +269,7 @@ int main() {
   vmeDebugFreeBuffers();
   
   unloadBinary(uvar);
+  endThread(&ended, thid);
   sceKernelExitGame();
   return 0;
 }

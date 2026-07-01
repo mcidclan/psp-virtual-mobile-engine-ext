@@ -11,30 +11,28 @@
 
 static inline Uncached32* loadBinary(const char* const path) {
 
+  static volatile u32* data __attribute__((aligned(64))) = NULL;
+  static Uncached32 alloc = {&(data), NULL};
+
   FILE *file = fopen(path, "rb");
   if (file == NULL) {
-    return {NULL, NULL};
+    return &alloc;
   }
   
   fseek(file, 0, SEEK_END);
   const int bytes = ftell(file);
   rewind(file);
 
-  static volatile u32* var __attribute__((aligned(64))) = NULL;
-  Uncached32 uvar = {&(var), NULL};
-  meLibAllocUncached32(&uvar, bytes / 4);
+  meLibAllocUncached32(&alloc, bytes / 4);
   
-  int read = fread(dst, 1, bytes, file);
+  fread((void*)data, 1, bytes, file);
   fclose(file);
   
-  if (read != bytes) {
-    return {NULL, NULL};
-  }
-  return &uvar;
+  return &alloc;
 }
 
-static inline void unloadBinary(Uncached32* const uvar) {
+static inline void unloadBinary(Uncached32* const alloc) {
   
-  meLibAllocUncached32(uvar, 0);
+  meLibAllocUncached32(alloc, 0);
 }
 
