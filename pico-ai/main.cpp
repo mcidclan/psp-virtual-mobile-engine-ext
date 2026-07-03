@@ -11,13 +11,12 @@ ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 VME_DEBUG_SET_BUFFER_WORD_COUNT(32);
 
 #define SAMPLE_PERIOD 16667
-
-volatile int capturing   = 0;
-volatile int sampleReady = 0;
-signed char samples[128] = {0};
+signed char samples[128] __attribute__((aligned(64))) = {0};
 
 meLibSetSharedUncached32(10);
-#define meCounter    (meLibSharedMemory[1])
+#define meCounter    (meLibSharedMemory[0])
+#define sampleReady  (meLibSharedMemory[1])
+#define capturing    (meLibSharedMemory[2])
 
 VME_LIB_CONTEXT_BUILDER(setupHiddenLayer, param, {
   
@@ -71,7 +70,7 @@ void runContext() {
 }
 
 //#define VME_SAMPLE_BUFFER_OFFSET (VME_TOP_BUFFERS + 1024)
-#define VME_SAMPLE_BUFFER_OFFSET (VME_TOP_BUFFERS) // tmp debug
+#define VME_SAMPLE_BUFFER_OFFSET (VME_BASE_BUFFERS) // tmp debug
 #define VME_SAMPLE_BUFFER_SIZE   (512)
 
 void meLibOnProcess(void) {
@@ -85,14 +84,19 @@ void meLibOnProcess(void) {
   */
   
   while (1) {
-    
+
     if (sampleReady) {
       
+      vmeLibEnable();
+      
+      meCoreDcacheInvalidateRange(samples, 128);
       meCoreMemcpy((void*)VME_SAMPLE_BUFFER_OFFSET, samples, VME_SAMPLE_BUFFER_SIZE);
       vmeDebugFillWith(VME_BASE_BUFFERS);
+      
       sampleReady = 0;
+      vmeLibDisable();
     }
-  
+
     /*
     if () {
       vmeLibEnable();
@@ -126,11 +130,14 @@ void meLibOnProcess(void) {
 int recorder(SceSize args, void *argp) {
 
   int* const ended = (int*)*((int*)argp);
+  
+  SceCtrlData pad;
   sceCtrlSetSamplingCycle(0);
   sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-  SceCtrlData pad;
+  
   u32 warmupStart = sceKernelGetSystemTimeLow();
   while (sceKernelGetSystemTimeLow() - warmupStart < 1000000) {
+    
     sceCtrlPeekBufferPositive(&pad, 1);
     sceKernelDelayThread(500);
   }
@@ -145,7 +152,7 @@ int recorder(SceSize args, void *argp) {
   u32 lastTick = sceKernelGetSystemTimeLow();
 
   while (!*ended) {
-
+    
     u32 now = sceKernelGetSystemTimeLow();
     if (now - lastTick < SAMPLE_PERIOD) {
       sceKernelDelayThread(500);
@@ -180,10 +187,15 @@ int recorder(SceSize args, void *argp) {
       capIndex++;
 
       if (capIndex >= 64) {
-        capturing = 0;
-        capIndex = 0;
+        
         preHead = 0;
-        for (int i = 0; i < PRETRIG; i++) { preX[i] = 0; preY[i] = 0; }
+        capIndex = 0;
+        capturing = 0;
+        for (int i = 0; i < PRETRIG; i++) {
+          preX[i] = 0; preY[i] = 0;
+        }
+        
+        sceKernelDcacheWritebackRange(samples, 128);
         sampleReady = 1;
       }
     }
@@ -235,7 +247,7 @@ int main() {
       const int y = 1;
       
       pspDebugScreenSetXY(x, y);
-      pspDebugScreenPrintf("Result of the 4 Processing Elements:");
+      pspDebugScreenPrintf("Result of the 4 Processing Elements");
       
       pspDebugScreenSetXY(x, y + 2);
       pspDebugScreenPrintf("BASE_0:");
