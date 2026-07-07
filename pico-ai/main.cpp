@@ -20,46 +20,98 @@ meLibSetSharedUncached32(10);
 
 VME_LIB_CONTEXT_BUILDER(setupHiddenLayer, param, {
   
+  // todo: add ReLu and sat using max(0, min(127, n) on secondary FUs
+  
   vme_icn(AGU_TOP, 0);
-  vme_icn(AGU_BASE, 0);
+  vme_icn(AGU_BASE, 0x4440);
   vme_icn(AGU_WRITE, 0);
   
-  // first neurone 
-  vme_pe0(vme_fu(PRIMARY), 0);
+  const int rShift = 7;
+  const u32 VMAC = 0x00240000;
+  
+  // first neuron 
+  {
+    const u32 mux = vme_mux(TOP_0, BASE_0);
+    vme_pe0(vme_fu(PRIMARY), VMAC, mux, rShift);
+  }
 
   const int count = 128;
+  
+  // weights for first layer
   vme_pe0(agu_top(MODE), VME_DEF_MODE);
   vme_pe0(agu_top(COUNT), VME_DEF_STEP, count);
+  
+   // dynamic input from joystick recorder
+  vme_pe0(agu_base(MODE), VME_DEF_MODE, 1024);
+  vme_pe0(agu_base(COUNT), VME_DEF_STEP, count);
+  
   vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6);
   vme_pe0(agu_write(COUNT), VME_DEF_STEP, count);
   
-  // second neurone 
-  vme_pe1(vme_fu(PRIMARY), 0);
+  // second neuron
+  {
+    const u32 mux = vme_mux(TOP_1, BASE_0);
+    vme_pe1(vme_fu(PRIMARY), VMAC, mux, rShift);
+  }
   
-  // third neurone 
-  vme_pe2(vme_fu(PRIMARY), 0);
+  // third neuron
+  {
+    const u32 mux = vme_mux(TOP_2, BASE_0);
+    vme_pe2(vme_fu(PRIMARY), VMAC, mux, rShift);
+  }
   
-  // forth neurone 
-  vme_pe3(vme_fu(PRIMARY), 0);
+  // forth neuron
+  {
+    const u32 mux = vme_mux(TOP_3, BASE_0);
+    vme_pe3(vme_fu(PRIMARY), VMAC, mux, rShift);
+  }
 });
 
 VME_LIB_CONTEXT_BUILDER(setupOutputLayer, param, {
-  
+    
   vme_icn(AGU_TOP, 0);
-  vme_icn(AGU_BASE, 0);
+  vme_icn(AGU_BASE, 0x4440);
   vme_icn(AGU_WRITE, 0);
   
-  // first neurone 
-  vme_pe0(vme_fu(PRIMARY), 0);
+  const int sat = 8 << 7; // n << 7: [-2^(n-1), 2^(n-1) - 1]
+  const int rShift = 7;
+  const u32 VMAC = 0x00240000;
+  
+  {
+    const u32 mux = vme_mux(TOP_0, BASE_0);
+    vme_pe0(vme_fu(PRIMARY), VMAC, mux, sat, rShift);
+  }
 
   const int count = 4;
-  vme_pe0(agu_top(MODE), VME_DEF_MODE);
+  
+  // weights for second layer
+  vme_pe0(agu_top(MODE), VME_DEF_MODE, 1024);
   vme_pe0(agu_top(COUNT), VME_DEF_STEP, count);
+  
+   // dynamic data from previous layer output
+  vme_pe0(agu_base(MODE), VME_DEF_MODE, 1024);
+  vme_pe0(agu_base(COUNT), VME_DEF_STEP, count);
+  
   vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6);
   vme_pe0(agu_write(COUNT), VME_DEF_STEP, count);
   
-  // second neurone 
-  vme_pe1(vme_fu(PRIMARY), 0);
+  // second neuron
+  {
+    const u32 mux = vme_mux(TOP_1, BASE_0);
+    vme_pe1(vme_fu(PRIMARY), VMAC, mux, sat, rShift);
+  }
+  
+  // third neuron
+  {
+    const u32 mux = vme_mux(TOP_2, BASE_0);
+    vme_pe2(vme_fu(PRIMARY), VMAC, mux, sat, rShift);
+  }
+  
+  // forth neuron
+  {
+    const u32 mux = vme_mux(TOP_3, BASE_0);
+    vme_pe3(vme_fu(PRIMARY), VMAC, mux, sat, rShift);
+  }
 });
 
 void runContext() {
@@ -69,19 +121,20 @@ void runContext() {
   vmeLibFinish();
 }
 
-//#define VME_SAMPLE_BUFFER_OFFSET (VME_TOP_BUFFERS + 1024)
-#define VME_SAMPLE_BUFFER_OFFSET (VME_BASE_BUFFERS) // tmp debug
 #define VME_SAMPLE_BUFFER_SIZE   (512)
+#define VME_SAMPLE_BUFFER_OFFSET (VME_TOP_BUFFERS + 1024)
 
 void meLibOnProcess(void) {
 
   meCoreDcacheWritebackInvalidateAll();
   meLibExceptionHandlerInit(0);
-  
-  /*
+
+  vmeLibEnable();
+  vmeLibWipe();
+  vmeLibDisable();
+
   void* const hiddenLayerContext = setupHiddenLayer(nullptr);
   void* const outputLayerContext = setupOutputLayer(nullptr);
-  */
   
   while (1) {
 
@@ -91,37 +144,26 @@ void meLibOnProcess(void) {
       
       meCoreDcacheInvalidateRange(samples, 128);
       meCoreMemcpy((void*)VME_SAMPLE_BUFFER_OFFSET, samples, VME_SAMPLE_BUFFER_SIZE);
-      vmeDebugFillWith(VME_BASE_BUFFERS);
-      
-      sampleReady = 0;
-      vmeLibDisable();
-    }
-
-    /*
-    if () {
-      vmeLibEnable();
       
       {
-        vmeLibWipe();
-        
         vmeLibStart();
         {
-          vmeLibLoadCustomContext(addContext);
+          vmeLibLoadCustomContext(hiddenLayerContext);
           vmeLibProcessAsync();
           
-          vmeLibLoadCustomContext(subContext);
-          vmeLibProcessAsync();
+          // todo: copy result to BASE_0 + 1024 words
           
-          vmeLibLoadCustomContext(mulContext);
-          vmeLibProcessAsync();
+          //vmeLibLoadCustomContext(outputLayerContext);
+          //vmeLibProcessAsync();
         }
         vmeLibFinishAsync();
       }
       
       vmeDebugFillWith(VME_BASE_BUFFERS);
+      
+      sampleReady = 0;
       vmeLibDisable();
     }
-    */
     
     meCounter += 1;
   }
