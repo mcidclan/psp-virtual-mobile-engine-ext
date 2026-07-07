@@ -9,25 +9,26 @@
 #include <vme-ext.h>
 #include <debug.h>
 
-static inline Uncached32* loadBinary(const char* const path) {
+static inline Uncached32* loadBinary(
+  const char* const path, volatile u32** const data) {
+  
+  static Uncached32 alloc;
+  alloc = (Uncached32){data, NULL};
 
-  static volatile u32* data __attribute__((aligned(64))) = NULL;
-  static Uncached32 alloc = {&(data), NULL};
-
-  FILE *file = fopen(path, "rb");
+  FILE* file = fopen(path, "rb");
   if (file == NULL) {
     return &alloc;
   }
-  
+
   fseek(file, 0, SEEK_END);
   const int bytes = ftell(file);
   rewind(file);
 
   meLibAllocUncached32(&alloc, bytes / 4);
-  
-  fread((void*)data, 1, bytes, file);
+
+  fread((void*)*data, 1, bytes, file);
   fclose(file);
-  
+
   return &alloc;
 }
 

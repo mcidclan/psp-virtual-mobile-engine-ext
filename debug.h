@@ -78,10 +78,13 @@ static inline void vmeDebugDump(const char* const path,
   char format[36] = "0x%08lx, 0x%08lx, 0x%08lx, 0x%08lx,";                     \
   format[4] = format[13] = format[22] = format[31] = digit;                    \
   const int count = VME_DEBUG_BUFFER_WORD_COUNT;                               \
+  const u32 mask = (digit == VME_DEBUG_DIGIT_8) ?                              \
+    0xFFFFFFFFu : ((1u << ((digit - '0') * 4)) - 1u);                          \
   u32* const data = (u32*)&(vmeDebugBuffers[count * index]);                   \
   for (int i = 0; i < count; i += 4) {                                         \
     pspDebugScreenSetXY(x, y+i/4);                                             \
-    pspDebugScreenPrintf(format, data[i+0], data[i+1], data[i+2], data[i+3]);  \
+    pspDebugScreenPrintf(format, data[i+0] & mask, data[i+1] & mask,           \
+      data[i+2] & mask, data[i+3] & mask);                                     \
   }                                                                            \
 }
 

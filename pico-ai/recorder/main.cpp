@@ -98,7 +98,7 @@ int recorder(SceSize args, void *argp) {
     lastTick = now;
 
     sceCtrlPeekBufferPositive(&pad, 1);
-    signed char x = (signed char)(pad.Lx - 128);
+    signed char x = (signed char)(3 * ((int)((pad.Lx - 128) / 3)));
     signed char y = (signed char)(pad.Ly - 128);
 
     if (!capturing) {
@@ -161,7 +161,7 @@ int recorder(SceSize args, void *argp) {
           lockTick = lockNow;
           
           sceCtrlPeekBufferPositive(&pad, 1);
-          signed char lx = (signed char)(pad.Lx - 128);
+          signed char lx = (signed char)(3 * ((int)((pad.Lx - 128) / 3)));
           signed char ly = (signed char)(pad.Ly - 128);
           
           if (lx > THRESHOLD || lx < -THRESHOLD || ly > THRESHOLD || ly < -THRESHOLD) {
