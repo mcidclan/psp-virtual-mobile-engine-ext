@@ -73,6 +73,9 @@ static inline void vmeDebugDump(const char* const path,
   vmeDebugDump("./log.txt", count, (u32*)&(vmeDebugBuffers[count*3]), "BASE 3"); \
 }
 
+#define vmeDebugGetValue(index, offset) \
+  (((u32*)&(vmeDebugBuffers[VME_DEBUG_BUFFER_WORD_COUNT * (index)]))[offset])
+
 #define vmeDebugDisplayBuffer(digit, index, x, y) {                            \
                                                                                \
   char format[36] = "0x%08lx, 0x%08lx, 0x%08lx, 0x%08lx,";                     \

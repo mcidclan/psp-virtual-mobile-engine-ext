@@ -70,6 +70,12 @@ def save_model(path, W1, W2):
         val = int(np.clip(round(w * 128), -128, 127)) & 0xFFFFFF
         f.write(struct.pack('<I', val))
 
+def confusion_matrix(preds, Y, n_classes):
+  cm = np.zeros((n_classes, n_classes), dtype=int)
+  for p, y in zip(preds, Y):
+    cm[y, p] += 1
+  return cm
+
 if __name__ == '__main__':
   if len(sys.argv) < 3:
     print("usage: train.py <model.bin> <sample.00.bin> [sample.01.bin ...]")
@@ -93,6 +99,18 @@ if __name__ == '__main__':
       preds    = np.argmax(A2, axis=1)
       accuracy = np.mean(preds == Y) * 100
       print(f"epoch {epoch:4d}  loss={loss:.4f}  acc={accuracy:.1f}%")
+      
+  print("\n=== Float model evaluation ===")
+  _, _, _, A2_float = forward(X, W1, W2)
+  preds_float = np.argmax(A2_float, axis=1)
+  
+  print("float accuracy:", np.mean(preds_float == Y) * 100)
+  n_classes = len(np.unique(Y))
+  cm = confusion_matrix(preds_float, Y, n_classes)
+
+  print("\nFloat confusion matrix")
+  print(cm)
+  
   print("saving model...")
   save_model(model_path, W1, W2)
   print(f"model saved to {model_path}")

@@ -65,6 +65,8 @@ int saveBuffer() {
   return 1;
 }
 
+#define JOYSTICK_ADJUSTER(v) ((8 * (int)(v / 8)) - 128)
+
 int recorder(SceSize args, void *argp) {
   
   int* const ended = (int*)*((int*)argp);
@@ -98,8 +100,8 @@ int recorder(SceSize args, void *argp) {
     lastTick = now;
 
     sceCtrlPeekBufferPositive(&pad, 1);
-    signed char x = (signed char)(pad.Lx - 128);
-    signed char y = (signed char)(pad.Ly - 128);
+    signed char x = (signed char)JOYSTICK_ADJUSTER(pad.Lx);
+    signed char y = (signed char)JOYSTICK_ADJUSTER(pad.Ly);
 
     if (!capturing) {
       
@@ -114,7 +116,7 @@ int recorder(SceSize args, void *argp) {
           
           for (int i = 0; i < PRETRIG; i++) {
             int idx = (preHead + i) % PRETRIG;
-            samples[i] = preX[idx] ;
+            samples[i] = preX[idx];
             samples[i + 64] = preY[idx];
           }
           capIndex = PRETRIG;
@@ -161,8 +163,8 @@ int recorder(SceSize args, void *argp) {
           lockTick = lockNow;
           
           sceCtrlPeekBufferPositive(&pad, 1);
-          signed char lx = (signed char)(pad.Lx - 128);
-          signed char ly = (signed char)(pad.Ly - 128);
+          signed char lx = (signed char)JOYSTICK_ADJUSTER(pad.Lx);
+          signed char ly = (signed char)JOYSTICK_ADJUSTER(pad.Ly);
           
           if (lx > THRESHOLD || lx < -THRESHOLD || ly > THRESHOLD || ly < -THRESHOLD) {
             lockFrames = 0;
@@ -222,7 +224,8 @@ int main() {
   
   SceCtrlData ctl;
   do {
-    
+    pspDebugScreenSetTextColor(0xffffffff);
+
     sceCtrlPeekBufferPositive(&ctl, 1);
     u32 pressed = ctl.Buttons & ~prev;
     
@@ -253,7 +256,7 @@ int main() {
     prev = ctl.Buttons;
 
     pspDebugScreenSetXY(1, 1);
-    pspDebugScreenPrintf("Pico AI Recorder...");
+    pspDebugScreenPrintf("Pico AI Recorder");
     pspDebugScreenSetXY(1, 3);
     pspDebugScreenPrintf("Recording number: %d      ", currentFileIdx);
     pspDebugScreenSetXY(1, 4);
@@ -265,10 +268,14 @@ int main() {
     
     pspDebugScreenSetXY(1, 8);
     if (capturing) {
+      pspDebugScreenSetTextColor(0xff0ff000);
       pspDebugScreenPrintf("* Recording...               ");
+      pspDebugScreenSetTextColor(0xffffffff);
     }
     else if (locked) {
+      pspDebugScreenSetTextColor(0xff0000ff);
       pspDebugScreenPrintf("Recording stopped, wait...   ");
+      pspDebugScreenSetTextColor(0xffffffff);
     }
     else if (warningTimer > 0) {
       pspDebugScreenPrintf("Buffer not full yet!         ");
@@ -277,7 +284,7 @@ int main() {
       pspDebugScreenPrintf("Press O to save, [] to reset ");
     }
     else {
-      pspDebugScreenPrintf("Move stick to record...      ");
+      pspDebugScreenPrintf("Move stick to record.          ");
     }
     
     pspDebugScreenSetXY(1, 10);

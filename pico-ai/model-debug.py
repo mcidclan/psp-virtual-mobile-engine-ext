@@ -86,55 +86,33 @@ def confusion_matrix(preds, Y):
 
 if __name__ == "__main__":
   if len(sys.argv) < 3:
-    print(
-      "usage: test_model.py model.bin sample.00.bin ..."
-    )
+    print("usage: test_model.py model.bin sample.00.bin ...")
     sys.exit(1)
 
   model_path = sys.argv[1]
   files = sys.argv[2:]
+
   X, Y = load_dataset(files)
-  print(
-    f"{len(Y)} samples loaded"
-  )
+  print(f"{len(Y)} samples loaded")
 
   W1, W2 = load_model(model_path)
 
   print("W1:")
   print(W1)
-  print("\nW2:")
+  print("W2:")
   print(W2)
 
-  A2 = forward(
-    X,
-    W1,
-    W2
-  )
-  preds = np.argmax(
-    A2,
-    axis=1
-  )
-  acc = np.mean(
-    preds == Y
-  ) * 100
+  A2 = forward(X, W1, W2)
 
-  print(
-    f"\naccuracy: {acc:.1f}%"
-  )
-  print("\nPredictions:")
+  preds = np.argmax(A2, axis=1)
+  acc = np.mean(preds == Y) * 100
+
+  print(f"accuracy: {acc:.1f}%")
+  print("Predictions:")
 
   for i in range(len(Y)):
-    print(
-      f"{i:3d} "
-      f"true={Y[i]} "
-      f"pred={preds[i]} "
-      f"score={A2[i]}"
-    )
+    print(f"{i:3d} true={Y[i]} pred={preds[i]} score={A2[i]}")
 
-  print("\nConfusion matrix:")
-  print(
-    confusion_matrix(
-      preds,
-      Y
-    )
-  )
+  print("Confusion matrix:")
+  print(confusion_matrix(preds, Y))
+

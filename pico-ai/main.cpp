@@ -8,8 +8,9 @@ PSP_HEAP_SIZE_KB(-1024);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
-VME_DEBUG_SET_BUFFER_WORD_COUNT(32);
+VME_DEBUG_SET_BUFFER_WORD_COUNT(4);
 
+#define MIN_LOCK      90
 #define SAMPLE_PERIOD 16667
 
 #define VME_DATA_GAP 256
@@ -202,9 +203,7 @@ void meLibOnProcess(void) {
       {
         vmeLibStart();
         vmeLibLoadCustomContext(hiddenLayerContext);
-        //vmeLibProcessAsync();
-        vmeLibFinish(); // tmp
-        
+        vmeLibFinish();
         
         // copy previous result to BASE_0 + VME_DATA_GAP words
         const u32 dstBase = VME_BASE_BUFFER_0 + VME_DATA_GAP * 4;
@@ -215,16 +214,13 @@ void meLibOnProcess(void) {
         hw(dstBase + 0x08) = hw(VME_BASE_BUFFER_2 + srcOff);
         hw(dstBase + 0x0c) = hw(VME_BASE_BUFFER_3 + srcOff);
         
-        vmeLibStart(); // tmp
+        vmeLibStart();
         vmeLibLoadCustomContext(outputLayerContext);
+        vmeLibProcessAsync();
         
-        //vmeLibProcessAsync();
-        vmeLibFinish(); // tmp
-        
-        //vmeLibFinishAsync();
+        vmeDebugFillWith(VME_BASE_BUFFERS);
+        vmeLibFinishAsync();
       }
-      
-      vmeDebugFillWith(VME_BASE_BUFFERS);
       
       vmeLibDisable();
       sampleReady = 0;
@@ -234,6 +230,9 @@ void meLibOnProcess(void) {
   }
 }
 
+#define JOYSTICK_ADJUSTER(v) ((8 * (int)(v / 8)) - 128)
+
+int locked = 0;
 int reader(SceSize args, void *argp) {
   int* const ended = (int*)*((int*)argp);
 
@@ -248,13 +247,16 @@ int reader(SceSize args, void *argp) {
   }
 
   const int PRETRIG = 8;
-  const int THRESHOLD = 20;
+  const int THRESHOLD = 64;
+  
+  //int locked = 0;
   int preHead = 0;
+  int capIndex = 0;
+
   signed char preX[8] = {0};
   signed char preY[8] = {0};
-  int capIndex = 0;
+  
   u32 lastTick = sceKernelGetSystemTimeLow();
-
   while (!*ended) {
 
     u32 now = sceKernelGetSystemTimeLow();
@@ -271,38 +273,74 @@ int reader(SceSize args, void *argp) {
     }
 
     sceCtrlPeekBufferPositive(&pad, 1);
-    signed char x = (signed char)(pad.Lx - 128);
-    signed char y = (signed char)(pad.Ly - 128);
+    signed char x = (signed char)JOYSTICK_ADJUSTER(pad.Lx);
+    signed char y = (signed char)JOYSTICK_ADJUSTER(pad.Ly);
 
     if (!capturing) {
-      preX[preHead % PRETRIG] = x;
-      preY[preHead % PRETRIG] = y;
-      preHead++;
-      if (preHead >= PRETRIG &&
-         (x > THRESHOLD || x < -THRESHOLD || y > THRESHOLD || y < -THRESHOLD)) {
-        for (int i = 0; i < PRETRIG; i++) {
-          int idx = (preHead + i) % PRETRIG;
-          samples[i] = preX[idx];
-          samples[i + 64] = preY[idx];
+      
+      if (!locked) {
+        
+        preX[preHead % PRETRIG] = x;
+        preY[preHead % PRETRIG] = y;
+        preHead++;
+        
+        if (preHead >= PRETRIG &&
+           (x > THRESHOLD || x < -THRESHOLD || y > THRESHOLD || y < -THRESHOLD)) {
+          
+          for (int i = 0; i < PRETRIG; i++) {
+            int idx = (preHead + i) % PRETRIG;
+            samples[i] = preX[idx];
+            samples[i + 64] = preY[idx];
+          }
+          capIndex = PRETRIG;
+          capturing = 1;
         }
-        capIndex = PRETRIG;
-        capturing = 1;
       }
     } else {
+      
       samples[capIndex] = x;
       samples[capIndex + 64] = y;
       capIndex++;
+      
       if (capIndex >= 64) {
 
-        preHead = 0;
-        capIndex = 0;
         capturing = 0;
-        for (int i = 0; i < PRETRIG; i++) {
-          preX[i] = 0; preY[i] = 0;
-        }
+        locked = 1;
 
         sceKernelDcacheWritebackRange((void*)samples, VME_SAMPLE_BUFFER_SIZE);
         sampleReady = 1;
+
+        preHead = 0;
+        for (int i = 0; i < PRETRIG; i++) { preX[i] = 0; preY[i] = 0; }
+
+        {
+          u32 lockTick = sceKernelGetSystemTimeLow();
+          int lockFrames = 1;
+          while (lockFrames && !*ended) {
+
+            u32 lockNow = sceKernelGetSystemTimeLow();
+            if (lockNow - lockTick < SAMPLE_PERIOD) {
+              sceKernelDelayThread(500);
+              continue;
+            }
+            lockTick = lockNow;
+
+            sceCtrlPeekBufferPositive(&pad, 1);
+            signed char lx = (signed char)JOYSTICK_ADJUSTER(pad.Lx);
+            signed char ly = (signed char)JOYSTICK_ADJUSTER(pad.Ly);
+
+            if (lx > THRESHOLD || lx < -THRESHOLD || ly > THRESHOLD || ly < -THRESHOLD) {
+              preX[preHead % PRETRIG] = lx;
+              preY[preHead % PRETRIG] = ly;
+              preHead++;
+              lastTick = lockTick;
+              lockFrames = 0;
+            }
+          }
+        }
+
+        locked = 0;
+        capIndex = 0;
       }
     }
   }
@@ -351,7 +389,8 @@ int main() {
   
   SceCtrlData ctl;
   do {
-    
+    pspDebugScreenSetTextColor(0xffffffff);
+
     sceCtrlPeekBufferPositive(&ctl, 1);
     
     {
@@ -361,6 +400,7 @@ int main() {
       pspDebugScreenSetXY(x, y);
       pspDebugScreenPrintf("Result of the 4 Processing Elements");
       
+      
       pspDebugScreenSetXY(x, y + 2);
       pspDebugScreenPrintf("BASE_0:");
       vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_0, x, y + 3);
@@ -369,18 +409,44 @@ int main() {
       pspDebugScreenPrintf("BASE_1:");
       vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_1, x + 34, y + 3);
       
-      pspDebugScreenSetXY(x, y + 12);
+      pspDebugScreenSetXY(x, y + 5);
       pspDebugScreenPrintf("BASE_2:");
-      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_2, x, y + 13);
+      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_2, x, y + 6);
       
-      pspDebugScreenSetXY(x + 34, y + 12);
+      pspDebugScreenSetXY(x + 34, y + 5);
       pspDebugScreenPrintf("BASE_3:");
-      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_3, x + 34, y + 13);
+      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_3, x + 34, y + 6);
     }
-  
-    pspDebugScreenSetXY(1, 24);
-    pspDebugScreenPrintf("meCounter: 0x%lx", meCounter);
+
+    {
+      const signed char b[] = {
+        (signed char)(vmeDebugGetValue(VME_DBG_IDX_BASE_0, 3) & 0xFF),
+        (signed char)(vmeDebugGetValue(VME_DBG_IDX_BASE_1, 3) & 0xFF),
+        (signed char)(vmeDebugGetValue(VME_DBG_IDX_BASE_2, 3) & 0xFF),
+        (signed char)(vmeDebugGetValue(VME_DBG_IDX_BASE_3, 3) & 0xFF),
+      };
+      
+      int index = 0;
+      for (int i = 1; i < 4; i++) {
+        if (b[i] > b[index]) {
+          index = i;
+        }
+      }
+      pspDebugScreenSetXY(1, 10);
+      pspDebugScreenPrintf("Label/Class: %i   ", index);
+    }
     
+    pspDebugScreenSetXY(1, 11);
+    if (!locked) {
+      pspDebugScreenSetTextColor(0xff00ff00);
+      pspDebugScreenPrintf("capturing...                 ");
+      pspDebugScreenSetTextColor(0xffffffff);
+    } else {
+      pspDebugScreenPrintf("waiting for motion...");
+    }
+    
+    pspDebugScreenSetXY(46, 32);
+    pspDebugScreenPrintf("ME Counter: 0x%lx", meCounter);
     
     sceDisplayWaitVblank();
     
