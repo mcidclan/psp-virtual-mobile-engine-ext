@@ -56,7 +56,7 @@ int saveBuffer() {
     return 0;
   }
   
-  for (int i = 0; i < MAX_RECORDS; i++) {
+  for (int i = 0; i < recordCount; i++) {
     sceIoWrite(fd, &recordBuffer[i].label, sizeof(int));
     sceIoWrite(fd, recordBuffer[i].samples, 128);
   }
@@ -98,7 +98,7 @@ int recorder(SceSize args, void *argp) {
     lastTick = now;
 
     sceCtrlPeekBufferPositive(&pad, 1);
-    signed char x = (signed char)(3 * ((int)((pad.Lx - 128) / 3)));
+    signed char x = (signed char)(pad.Lx - 128);
     signed char y = (signed char)(pad.Ly - 128);
 
     if (!capturing) {
@@ -114,7 +114,7 @@ int recorder(SceSize args, void *argp) {
           
           for (int i = 0; i < PRETRIG; i++) {
             int idx = (preHead + i) % PRETRIG;
-            samples[i] = preX[idx];
+            samples[i] = preX[idx] ;
             samples[i + 64] = preY[idx];
           }
           capIndex = PRETRIG;
@@ -161,7 +161,7 @@ int recorder(SceSize args, void *argp) {
           lockTick = lockNow;
           
           sceCtrlPeekBufferPositive(&pad, 1);
-          signed char lx = (signed char)(3 * ((int)((pad.Lx - 128) / 3)));
+          signed char lx = (signed char)(pad.Lx - 128);
           signed char ly = (signed char)(pad.Ly - 128);
           
           if (lx > THRESHOLD || lx < -THRESHOLD || ly > THRESHOLD || ly < -THRESHOLD) {
@@ -253,7 +253,7 @@ int main() {
     prev = ctl.Buttons;
 
     pspDebugScreenSetXY(1, 1);
-    pspDebugScreenPrintf("Pico AI Recorder");
+    pspDebugScreenPrintf("Pico AI Recorder...");
     pspDebugScreenSetXY(1, 3);
     pspDebugScreenPrintf("Recording number: %d      ", currentFileIdx);
     pspDebugScreenSetXY(1, 4);

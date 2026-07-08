@@ -15,7 +15,7 @@ python train.py model.bin sample.*.bin
 ```
 
 ## Combo Group Examples
-See [Combo Groups](combo-groups.md)
+See [Combo Groups](recorder/combo-groups.md)
 
 ## Disclamer
 

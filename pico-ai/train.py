@@ -28,11 +28,12 @@ def load_dataset(paths):
   Y = np.array(labels,  dtype=np.int32)
   return X, Y
 
+
 def relu(x):
-  return np.maximum(0, x)
+  return np.where(x > 0, x, 0.01 * x)
 
 def relu_grad(x):
-  return (x > 0).astype(np.float32)
+  return np.where(x > 0, 1.0, 0.01).astype(np.float32)
 
 def softmax(x):
   e = np.exp(x - np.max(x, axis=1, keepdims=True))
