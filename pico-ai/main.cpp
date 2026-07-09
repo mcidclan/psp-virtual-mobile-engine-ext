@@ -216,10 +216,9 @@ void meLibOnProcess(void) {
         
         vmeLibStart();
         vmeLibLoadCustomContext(outputLayerContext);
-        vmeLibProcessAsync();
+        vmeLibFinish();
         
         vmeDebugFillWith(VME_BASE_BUFFERS);
-        vmeLibFinishAsync();
       }
       
       vmeLibDisable();

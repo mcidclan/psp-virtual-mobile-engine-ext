@@ -35,9 +35,12 @@ python model-debug.py model.bin sample.*.bin
 ### using the model
 Use the main PSP app to experiment/test the model.
 
-
 ## Combo Group Examples
 See [Combo Groups](recorder/combo-groups.md)
+
+### Provided Data
+
+You can find default recorded samples for the first group of combos, and its related model in the recorder/generated folder. Noting that to get better results, you'll have to train your own model and record your own samples by performing your own gestures on your device.
 
 ## Pipelines and Architecture
 
