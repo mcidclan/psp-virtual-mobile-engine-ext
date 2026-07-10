@@ -13,7 +13,10 @@ VME_DEBUG_SET_BUFFER_WORD_COUNT(32);
 volatile u16* input __attribute__((aligned(64))) = nullptr;
 volatile u32* output __attribute__((aligned(64))) = nullptr;
 
-#define TILE_SIZE 1024
+#define TILE_COUNT (32*32)
+#define TILE_SIZE (TILE_COUNT * 2)
+#define TEXTURE_COUNT (64*64)
+#define TEXTURE_SIZE (TEXTURE_COUNT * 2)
 meLibSetSharedUncached32(10);
 #define meCounter    (meLibSharedMemory[1])
 
@@ -26,31 +29,30 @@ void runContext() {
 }
 */
 
-void meLibOnProcess(void) {
-
   const u32 buffer[] = {
-    /*
-    0x01, 0x02, 0x03, 0x04,
-    0x05, 0x06, 0x07, 0x08,
-    0x09, 0x0A, 0x0B, 0x0C,
-    0x0D, 0x0E, 0x0F, 0x10,
-    0x11, 0x12, 0x13, 0x14,
-    0x15, 0x16, 0x17, 0x18,
-    0x19, 0x1A, 0x1B, 0x1C,
-    0x1D, 0x1E, 0x1F, 0x20,
-    */
+
+//    0x01, 0x02, 0x03, 0x04,
+//    0x05, 0x06, 0x07, 0x08,
+//    0x09, 0x0A, 0x0B, 0x0C,
+//    0x0D, 0x0E, 0x0F, 0x10,
+//    0x11, 0x12, 0x13, 0x14,
+//    0x15, 0x16, 0x17, 0x18,
+//    0x19, 0x1A, 0x1B, 0x1C,
+//    0x1D, 0x1E, 0x1F, 0x20,
     
     // 0x00010203, 0x00040506, 0x00070809, 0x000a0b0c, 0x00d0e0f,
 
+    0x01020301, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
+    0x01020302, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
+    0x01020303, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
     0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
+    0x01020305, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
+    0x01020306, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
+    0x01020307, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
+    0x01020308, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
   };
+  
+void meLibOnProcess(void) {
   
   meCoreDcacheWritebackInvalidateAll();
   meLibExceptionHandlerInit(0);
@@ -66,13 +68,66 @@ void meLibOnProcess(void) {
   //vmeLibMemoryToRingBuffer((void*)&batch[2], VME_TOP_BUFF2_WOFF, count);
   //vmeLibMemoryToRingBuffer((void*)&batch[3], VME_TOP_BUFF3_WOFF, count);
   
+  hw(TILE_SIZE*0 + (u32)input) = 1;
+  hw(TILE_SIZE*1 + (u32)input) = 2;
+  hw(TILE_SIZE*2 + (u32)input) = 3;
+  hw(TILE_SIZE*3 + (u32)input) = 4;
   
-  vmeLibMemTo16((u32)buffer, 0, 16, VME_DMAC_WAIT_FINISH);
-  
-  while (1) {
 
-    vmeLibMemFrom16((u32)output, 0, 8, VME_DMAC_WAIT_FINISH);
-    vmeDebugFillWith(VME_BASE_BUFFERS);
+  // tile 0
+  vmeLibMemTo16(TILE_SIZE*0 + (u32)input,
+    VME_TOP_BUFF0_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // no wait
+  // tile 1
+  vmeLibMemTo16(TILE_SIZE*1 + (u32)input,
+    VME_TOP_BUFF1_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // no wait
+  // tile 2
+  vmeLibMemTo16(TILE_SIZE*2 + (u32)input,
+    VME_TOP_BUFF2_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // no wait
+  // tile 3
+  vmeLibMemTo16(TILE_SIZE*3 + (u32)input,
+    VME_TOP_BUFF3_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // wait
+
+  vmeLibStart();
+    
+  // configure pe0 READ TOP and WRITE AGUs
+  vme_pe0(agu_top(MODE), VME_DEF_MODE);
+  vme_pe0(agu_top(COUNT), VME_DEF_STEP, TILE_COUNT);
+  vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6);
+  vme_pe0(agu_write(COUNT), VME_DEF_STEP, TILE_COUNT);
+
+  // replicate pe0 AGUs configuration over other PEs
+  vme_icn(AGU_TOP, 0);
+  vme_icn(AGU_BASE, 0);
+  vme_icn(AGU_WRITE, 0);
+
+  {
+    const u32 mux = 0x10000000; //vme_mux(TOP_0, TOP_0);
+    vme_pe0(vme_fu(PRIMARY), mux, 0x00000000);
+  }
+  
+//  {
+//    const u32 mux = vme_mux(TOP_1, BASE_0);
+//    vme_pe1(vme_fu(PRIMARY), mux, 0x00004000);
+//  }
+  
+//  {
+//    const u32 mux = vme_mux(TOP_2, BASE_0);
+//    vme_pe2(vme_fu(PRIMARY), mux, 0x00004000);
+//  }
+  
+//  {
+//    const u32 mux = vme_mux(TOP_3, BASE_0);
+//    vme_pe3(vme_fu(PRIMARY), mux, 0x00004000);
+//  }
+ 
+  vmeLibFinish();
+  
+  //vmeDebugFillWith(VME_BASE_BUFFERS);
+  vmeDebugFillWith(VME_BASE_BUFFERS);
+
+  while (1) {
+    
+    //vmeLibMemFrom16((u32)output, 0, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH);
   
     //runContext();
   
@@ -129,7 +184,6 @@ int main() {
       pspDebugScreenPrintf("BASE_0:");
       vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_8, VME_DBG_IDX_BASE_0, x, y + 3);
       
-        
       pspDebugScreenSetXY(1, 12);
       pspDebugScreenPrintf("0x%lx 0x%lx 0x%lx 0x%lx        ", output[0], output[1], output[2], output[3]);
     

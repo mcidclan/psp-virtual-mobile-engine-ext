@@ -200,6 +200,7 @@ void meLibOnProcess(void) {
       meCoreDcacheInvalidateRange((void*)samples, VME_SAMPLE_BUFFER_SIZE);
       vmeLibMemoryToRingBuffer((void*)samples, VME_SAMPLE_BUFFER_OFFSET, VME_SAMPLE_BUFFER_COUNT);
       
+      // todo: review context switch
       {
         vmeLibStart();
         vmeLibLoadCustomContext(hiddenLayerContext);
