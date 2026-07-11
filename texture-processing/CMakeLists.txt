@@ -17,7 +17,7 @@ target_compile_options(vme PRIVATE
 )
 
 target_link_libraries(vme
-  me-core psppower pspge pspdisplay pspctrl pspdebug
+  me-core psppower pspge pspdisplay pspctrl pspdebug pspgu
 )
 
 create_pbp_file(TARGET vme TITLE "VME Texture Batches" BUILD_PRX)

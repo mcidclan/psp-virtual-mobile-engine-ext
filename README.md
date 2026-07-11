@@ -1,6 +1,6 @@
 ## PSP Virtual Mobile Engine Extension.
 
-This repository contains various code examples demonstrating how to use the Virtual Mobile Engine (VME) and take advantage of this reconfigurable CGRA. It also contains a 'me-custom-core' extension library to ease the use and debug/log of the VME in homebrew.
+This repository contains various code examples demonstrating how to use the Virtual Mobile Engine (VME) and take advantage of this reconfigurable CGRA. It also contains an extension for the 'me-custom-core' library to ease the use and debug/log of the VME in homebrew.
 
 ## Usage
 

@@ -8,7 +8,6 @@ PSP_HEAP_SIZE_KB(-1024);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
-VME_DEBUG_SET_BUFFER_WORD_COUNT(32);
 
 volatile u16* input __attribute__((aligned(64))) = nullptr;
 volatile u32* output __attribute__((aligned(64))) = nullptr;
@@ -17,40 +16,11 @@ volatile u32* output __attribute__((aligned(64))) = nullptr;
 #define TILE_SIZE (TILE_COUNT * 2)
 #define TEXTURE_COUNT (64*64)
 #define TEXTURE_SIZE (TEXTURE_COUNT * 2)
+
 meLibSetSharedUncached32(10);
-#define meCounter    (meLibSharedMemory[1])
-
-/*
-void runContext() {
-  
-  vmeLibStart();
-  //
-  vmeLibFinish();
-}
-*/
-
-  const u32 buffer[] = {
-
-//    0x01, 0x02, 0x03, 0x04,
-//    0x05, 0x06, 0x07, 0x08,
-//    0x09, 0x0A, 0x0B, 0x0C,
-//    0x0D, 0x0E, 0x0F, 0x10,
-//    0x11, 0x12, 0x13, 0x14,
-//    0x15, 0x16, 0x17, 0x18,
-//    0x19, 0x1A, 0x1B, 0x1C,
-//    0x1D, 0x1E, 0x1F, 0x20,
-    
-    // 0x00010203, 0x00040506, 0x00070809, 0x000a0b0c, 0x00d0e0f,
-
-    0x01020301, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020302, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020303, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020304, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020305, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020306, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020307, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-    0x01020308, 0x05060708, 0x090a0b0c, 0x0c0d0e0f,
-  };
+#define meCounter    (meLibSharedMemory[0])
+#define meValue      (meLibSharedMemory[1])
+#define meCanUpdate  (meLibSharedMemory[2])
   
 void meLibOnProcess(void) {
   
@@ -60,32 +30,18 @@ void meLibOnProcess(void) {
   vmeLibEnable();
   vmeLibWipe();
   
-  //int count = sizeof(batch[0]) / sizeof(u32);
- 
-  // top buffers
-  //vmeLibMemoryToRingBuffer((void*)&batch[0], VME_TOP_BUFF0_WOFF, count);
-  //vmeLibMemoryToRingBuffer((void*)&batch[1], VME_TOP_BUFF1_WOFF, count);
-  //vmeLibMemoryToRingBuffer((void*)&batch[2], VME_TOP_BUFF2_WOFF, count);
-  //vmeLibMemoryToRingBuffer((void*)&batch[3], VME_TOP_BUFF3_WOFF, count);
-  
-  hw(TILE_SIZE*0 + (u32)input) = 1;
-  hw(TILE_SIZE*1 + (u32)input) = 2;
-  hw(TILE_SIZE*2 + (u32)input) = 3;
-  hw(TILE_SIZE*3 + (u32)input) = 4;
-  
-
   // tile 0
   vmeLibMemTo16(TILE_SIZE*0 + (u32)input,
-    VME_TOP_BUFF0_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // no wait
+    VME_TOP_BUFF0_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_NO_WAIT);
   // tile 1
   vmeLibMemTo16(TILE_SIZE*1 + (u32)input,
-    VME_TOP_BUFF1_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // no wait
+    VME_TOP_BUFF1_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH);
   // tile 2
   vmeLibMemTo16(TILE_SIZE*2 + (u32)input,
-    VME_TOP_BUFF2_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // no wait
+    VME_TOP_BUFF2_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_NO_WAIT);
   // tile 3
   vmeLibMemTo16(TILE_SIZE*3 + (u32)input,
-    VME_TOP_BUFF3_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH); // wait
+    VME_TOP_BUFF3_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH);
 
   vmeLibStart();
     
@@ -100,43 +56,61 @@ void meLibOnProcess(void) {
   vme_icn(AGU_BASE, 0);
   vme_icn(AGU_WRITE, 0);
 
+  const u32 opcode = fu_op(OR);
+
   {
-    const u32 mux = 0x10000000; //vme_mux(TOP_0, TOP_0);
-    vme_pe0(vme_fu(PRIMARY), mux, 0x00000000);
+    const u32 mux = vme_mux(NONE, TOP_0);
+    vme_pe0(vme_fu(PRIMARY), mux, opcode);
   }
   
-//  {
-//    const u32 mux = vme_mux(TOP_1, BASE_0);
-//    vme_pe1(vme_fu(PRIMARY), mux, 0x00004000);
-//  }
+  {
+    const u32 mux = vme_mux(NONE, TOP_1);
+    vme_pe1(vme_fu(PRIMARY), mux, opcode);
+  }
   
-//  {
-//    const u32 mux = vme_mux(TOP_2, BASE_0);
-//    vme_pe2(vme_fu(PRIMARY), mux, 0x00004000);
-//  }
+  {
+    const u32 mux = vme_mux(NONE, TOP_2);
+    vme_pe2(vme_fu(PRIMARY), mux, opcode);
+  }
   
-//  {
-//    const u32 mux = vme_mux(TOP_3, BASE_0);
-//    vme_pe3(vme_fu(PRIMARY), mux, 0x00004000);
-//  }
+  {
+    const u32 mux = vme_mux(NONE, TOP_3);
+    vme_pe3(vme_fu(PRIMARY), mux, opcode);
+  }
  
   vmeLibFinish();
-  
-  //vmeDebugFillWith(VME_BASE_BUFFERS);
-  vmeDebugFillWith(VME_BASE_BUFFERS);
 
   while (1) {
     
-    //vmeLibMemFrom16((u32)output, 0, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH);
-  
-    //runContext();
-  
+    if (meCanUpdate) {
+      
+      // tile 0
+      vmeLibMemFrom16(TILE_SIZE*0 + (u32)output,
+        VME_BASE_BUFF0_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_NO_WAIT);
+      // tile 1
+      vmeLibMemFrom16(TILE_SIZE*1 + (u32)output,
+        VME_BASE_BUFF1_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH);
+      // tile 2
+      vmeLibMemFrom16(TILE_SIZE*2 + (u32)output,
+        VME_BASE_BUFF2_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_NO_WAIT);
+      // tile 3
+      vmeLibMemFrom16(TILE_SIZE*3 + (u32)output,
+        VME_BASE_BUFF3_WOFF, TILE_COUNT, VME_DMAC_TRANSFERT_WAIT_FINISH);
+      
+      vmeLibStart();
+      vme_pe0(fu_reg(PRIMARY, B), meValue);
+      vme_pe1(fu_reg(PRIMARY, B), meValue);
+      vme_pe2(fu_reg(PRIMARY, B), meValue);
+      vme_pe3(fu_reg(PRIMARY, B), meValue);
+      vmeLibFinish();
+      
+      meCanUpdate = 0;
+    }
     meCounter += 1;
   }
   
   vmeLibDisable();
 }
-
 
 #define setupSharedMemory() _setupSharedMemory(0)
 #define cleanSharedMemory() _setupSharedMemory(1)
@@ -157,68 +131,108 @@ void _setupSharedMemory(bool clean) {
   meLibAllocUncached32(&_output, TILE_SIZE);
 }
 
+#define IMG_POS_X 128
+#define IMG_POS_Y 128
+
 int main() {
   
-  setupSharedMemory();
-  loadRGBA16("./tex64x64.png", (u16*)input);
-  
   scePowerSetClockFrequency(333, 333, 166);
-  vmeDebugSetupBuffers();
+  setupSharedMemory();
+  
+  const int error = loadRGBA16("./mcid64x64.png", (u16*)input);
+  if (error >= 0) {
+  
+    meLibDefaultInit();
+    guInit();
+    
+    pspDebugScreenInitEx(0x0, PSP_DISPLAY_PIXEL_FORMAT_8888, 0);
+    pspDebugScreenEnableBackColor(0);
+    int buffer = DRAW_BUF_0;
+    pspDebugScreenSetOffset(buffer);
+    
+    int dir = 1;
+    int move = 0;
+    
+    float elapsed = 0.0f;
+    u64 lastTime = sceKernelGetSystemTimeWide();
 
-  meLibDefaultInit();
+    SceCtrlData ctl;
+    do {
+      
+      u64 now = sceKernelGetSystemTimeWide();
+      float deltaTime = (now - lastTime) / 1000000.0f;
+      elapsed += deltaTime;
+      lastTime = now;
+      
+      sceCtrlPeekBufferPositive(&ctl, 1);
+
+      sceGuStart(GU_DIRECT, list);
+      sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);
+      sceGuTexImage(0, 64, 64, 64, (void*)output);
+      
+      {
+        Vertex* const sprite = (Vertex*)sceGuGetMemory(sizeof(Vertex) * 2);
+        move += dir;
+        if(move > 128) {
+          dir = -1;
+        } else if(move < -128) {
+          dir = 1;
+        }
+        
+        sprite[0].u =
+        sprite[0].v = 0;
+        sprite[0].color = 0;
+        sprite[0].x = 208 + move;
+        sprite[0].y = 104;
+        sprite[0].z = 0;
+        
+        
+        sprite[1].u =
+        sprite[1].v = 64;
+        sprite[1].color = 0;
+        sprite[1].x = 64 + 208 + move;
+        sprite[1].y = 64 + 104;
+        sprite[1].z = 0;
+      
+        sceGuDrawArray(GU_SPRITES, GU_TEXTURE_16BIT | GU_COLOR_8888 |
+          GU_VERTEX_16BIT | GU_TRANSFORM_2D, 2, NULL, sprite);
+      }
+      
+      const u32 offset = (buffer == DRAW_BUF_0) ? DRAW_BUF_1 : DRAW_BUF_0;
+      pspDebugScreenSetOffset(offset);
+      
+      {
+        pspDebugScreenSetXY(1, 1);
+        pspDebugScreenPrintf("VME Texture Processing POC");
+
+        pspDebugScreenSetXY(1, 2);
+        pspDebugScreenPrintf("meCounter: 0x%lx", meCounter);
+      }
+      
+      
+      sceGuFinish();
+      sceGuSync(GU_SYNC_FINISH, GU_SYNC_WHAT_DONE);
+      
+      sceDisplayWaitVblankStart();
+      buffer = (int)sceGuSwapBuffers();
+      
+      if (!meCanUpdate) {
+        
+        meValue = meValueAdditive(elapsed);
+        meCanUpdate = 1;
+      }
+
+    } while (!(ctl.Buttons & PSP_CTRL_HOME));
+    
+    sceGuTerm();
+  }
+  else {
+    pspDebugScreenInit();
+    pspDebugScreenPrintf("Error while loading image, exit...");
+  }
   
-  pspDebugScreenInit();
-  SceCtrlData ctl;
-  do {
-    
-    sceCtrlPeekBufferPositive(&ctl, 1);
-    
-    {
-      const int x = 1;
-      const int y = 1;
-      
-      pspDebugScreenSetXY(x, y);
-      pspDebugScreenPrintf("Result of the 4 Processing Elements:");
-      
-      pspDebugScreenSetXY(x, y + 2);
-      pspDebugScreenPrintf("BASE_0:");
-      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_8, VME_DBG_IDX_BASE_0, x, y + 3);
-      
-      pspDebugScreenSetXY(1, 12);
-      pspDebugScreenPrintf("0x%lx 0x%lx 0x%lx 0x%lx        ", output[0], output[1], output[2], output[3]);
-    
-      
-      /*
-      pspDebugScreenSetXY(x + 34, y + 2);
-      pspDebugScreenPrintf("BASE_1:");
-      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_1, x + 34, y + 3);
-      
-      pspDebugScreenSetXY(x, y + 12);
-      pspDebugScreenPrintf("BASE_2:");
-      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_2, x, y + 13);
-      
-      pspDebugScreenSetXY(x + 34, y + 12);
-      pspDebugScreenPrintf("BASE_3:");
-      vmeDebugDisplayBuffer(VME_DEBUG_DIGIT_4, VME_DBG_IDX_BASE_3, x + 34, y + 13);
-      */
-    }
-  
-    pspDebugScreenSetXY(1, 24);
-    pspDebugScreenPrintf("meCounter: 0x%lx", meCounter);
-    
-    
-    sceDisplayWaitVblank();
-    
-  } while (!(ctl.Buttons & PSP_CTRL_HOME));
-  
-  sceKernelDelayThread(100000);
-  
-  vmeDebugTouch();
-  vmeDebugDumpBuffers();
-  vmeDebugFreeBuffers();
-  
+  sceKernelDelayThread(500000);
   cleanSharedMemory();
-  
   sceKernelExitGame();
   return 0;
 }
