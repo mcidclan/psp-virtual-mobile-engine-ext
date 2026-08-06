@@ -20,4 +20,4 @@ target_link_libraries(vme
   me-core psppower pspge pspdisplay pspctrl pspdebug pspgu
 )
 
-create_pbp_file(TARGET vme TITLE "VME Texture Processing" BUILD_PRX)
+create_pbp_file(TARGET vme TITLE "VME FFT" BUILD_PRX)
