@@ -101,9 +101,18 @@ static inline void vmeDebugDump(const char* const path,
   meCoreMemcpy((void*)&(vmeDebugBuffers[count*3]), (void*)(buffer + VME_SCRATCHPAD_BUFFER_SIZE*3), byteCount); \
 }
 
-#define vmeDebugDumpBuffer(index, name) {                                      \
-                                                                               \
-  const int count = VME_DEBUG_BUFFER_WORD_COUNT;                               \
+#define vmeDebugFillAtWith(index, offset) {              \
+                                                         \
+  const int count = VME_DEBUG_BUFFER_WORD_COUNT;         \
+  const int byteCount = count*4;                         \
+  meCoreMemcpy((void*)&(vmeDebugBuffers[count*(index)]),   \
+    (void*)(((offset)*4) + VME_SCRATCHPAD_BASE), byteCount); \
+}
+
+
+#define vmeDebugDumpBuffer(index, name) {                                        \
+                                                                                 \
+  const int count = VME_DEBUG_BUFFER_WORD_COUNT;                                 \
   vmeDebugDump("./log.txt", count, (u32*)&(vmeDebugBuffers[count*index]), name); \
 }
 
