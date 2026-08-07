@@ -11,51 +11,57 @@
 #include <vme-ext.h>
 #include <debug.h>
 
-#define TO_Q23(f) ((u32)(u32)((f) * 8388608.0f))
+//#define TO_Q23(f) ((u32)(u32)((f) * 8388608.0f))
 
-const u32 TWIDDLES[] = {
+#define Q_FORMAT 23
+#define F2Q(v) ((int)((v) * (1u << Q_FORMAT)))
+#define Q2F(v) ((float)(int)(v) / (1u << Q_FORMAT))
+
+const int REAL_TWIDDLES[15] = {
   
   // Stage 0
-  TO_Q23( 1.0f),          // 0
-  TO_Q23( 0.9238795f),
-  TO_Q23( 0.7071068f),
-  TO_Q23( 0.3826834f),
-  TO_Q23( 0.0f),
-  TO_Q23(-0.3826834f),
-  TO_Q23(-0.7071068f),
-  TO_Q23(-0.9238795f),
+  F2Q( 1.0f),          // 0
+  F2Q( 0.9238795f),
+  F2Q( 0.7071068f),
+  F2Q( 0.3826834f),
+  F2Q( 0.0f),
+  F2Q(-0.3826834f),
+  F2Q(-0.7071068f),
+  F2Q(-0.9238795f),
   
   // Stage 1
-  TO_Q23( 1.0f),          // 8
-  TO_Q23( 0.7071068f),
-  TO_Q23( 0.0f),
-  TO_Q23(-0.7071068f),
+  F2Q( 1.0f),          // 8
+  F2Q( 0.7071068f),
+  F2Q( 0.0f),
+  F2Q(-0.7071068f),
   // Stage 2
-  TO_Q23( 1.0f),          // 12
-  TO_Q23( 0.0f),
+  F2Q( 1.0f),          // 12
+  F2Q( 0.0f),
   // Stage 3
-  TO_Q23( 1.0f),          // 14
-  
+  F2Q( 1.0f),          // 14
+};
+
+const int IMAG_TWIDDLES[15] = {
   
   // Stage 0
-  TO_Q23( 0.0f),
-  TO_Q23(-0.3826834f),
-  TO_Q23(-0.7071068f),
-  TO_Q23(-0.9238795f),
-  TO_Q23(-1.0f),
-  TO_Q23(-0.9238795f),
-  TO_Q23(-0.7071068f),
-  TO_Q23(-0.3826834f),
+  F2Q( 0.0f),
+  F2Q(-0.3826834f),
+  F2Q(-0.7071068f),
+  F2Q(-0.9238795f),
+  F2Q(-1.0f),
+  F2Q(-0.9238795f),
+  F2Q(-0.7071068f),
+  F2Q(-0.3826834f),
   // Stage 1
-  TO_Q23( 0.0f),
-  TO_Q23(-0.7071068f),
-  TO_Q23(-1.0f),
-  TO_Q23(-0.7071068f),
+  F2Q( 0.0f),
+  F2Q(-0.7071068f),
+  F2Q(-1.0f),
+  F2Q(-0.7071068f),
   // Stage 2
-  TO_Q23( 0.0f),
-  TO_Q23(-1.0f),
+  F2Q( 0.0f),
+  F2Q(-1.0f),
   // Stage 3
-  TO_Q23( 0.0f)
+  F2Q( 0.0f)
 };
 
 const u32 _REAL_TWIDDLES[] = {  

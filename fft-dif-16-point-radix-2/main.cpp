@@ -31,7 +31,10 @@ VME_DEBUG_SET_BUFFER_WORD_COUNT(64);
 meLibSetSharedUncached32(10);
 #define meCounter    (meLibSharedMemory[0])
 
-//
+/*
+ * Context 1: Handles the additions and subtractions for both legs of the
+ * butterfly (upper and lower legs). This is done for real and imaginary parts
+ */
 VME_LIB_CONTEXT_GENERATOR(lowerLegGenerator, param, {
   
   const int tOffset[] = {
@@ -55,13 +58,13 @@ VME_LIB_CONTEXT_GENERATOR(lowerLegGenerator, param, {
   const int tStride = (FFT_VALUE_COUNT >> (stageId + 1));
 
   {
-    const u32 op = 0x00004000;
-    //const u32 op = fu_op(MUL_VEC_RSHIFT_BIAS);
+    //const u32 op = 0x00004000;
+    const u32 op = fu_op(MUL_VEC_RSHIFT_BIAS);
     
-    vme_pe0(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_0), op); // real (LowerLeg) vs real (Twiddles)
-    vme_pe1(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_2), op); // imag (LowerLeg) vs imag (Twiddles)
-    vme_pe2(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_2), op); // real (LowerLeg) vs imag (Twiddles)
-    vme_pe3(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_0), op); // imag (LowerLeg) vs real (Twiddles)
+    vme_pe0(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_0), op, 23); // real (LowerLeg) vs real (Twiddles)
+    vme_pe1(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_2), op, 23); // imag (LowerLeg) vs imag (Twiddles)
+    vme_pe2(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_2), op, 23); // real (LowerLeg) vs imag (Twiddles)
+    vme_pe3(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_0), op, 23); // imag (LowerLeg) vs real (Twiddles)
     
     vme_pe0(agu_top(MODE), agu_mode(2), FFT_TWIDDLE_BASE_OFFSET + offset);
     vme_pe0(agu_top(COUNT), VME_DEF_STEP, (count - 1));
@@ -70,25 +73,27 @@ VME_LIB_CONTEXT_GENERATOR(lowerLegGenerator, param, {
     
     vme_pe1(agu_base(MODE), VME_DEF_MODE);
     vme_pe1(agu_base(COUNT), VME_DEF_STEP, (count - 1));
-    
-    //
-    //vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6, 32); // todo
-    //vme_pe0(agu_write(COUNT), VME_DEF_STEP, (count - 1));
   }
   
   {
     vme_pe1(vme_fu(SECONDARY), vme_mux(STAGING_0, STAGING_1), fu_op(SUB_RSHIFT));
     vme_pe3(vme_fu(SECONDARY), vme_mux(STAGING_2, STAGING_3), fu_op(ADD_RSHIFT));
     
-    vme_pe1(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_9, 32); // todo
+    vme_pe1(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_9, 0);
     vme_pe1(agu_write(COUNT), VME_DEF_STEP, (count - 1));
   }
 
 });
 
-//
+/*
+ * Context 2: Handles the complex multiplications between the twiddle factors
+ * and the lower leg, leveraging the 64-bit accumulator to perform the entire set
+ * of operations within a single pipeline. This is done for real and imaginary parts
+ */
 VME_LIB_CONTEXT_GENERATOR(butterflyGenerator, param, {
   
+  //vme_set(ENABLE, FU_1, 0b1111 << 28);
+
   vme_icn(AGU_TOP, 0x1010);
   vme_icn(AGU_WRITE, 0x1010);
 
@@ -97,11 +102,16 @@ VME_LIB_CONTEXT_GENERATOR(butterflyGenerator, param, {
 
   {
     // upper leg (real and imaginary parts)
-    //const u32 op = fu_op(ADD_VEC);
-    const u32 op = 0x00004000;
+    const u32 op = fu_op(ADD_RSHIFT);
+    //const u32 op = 0x00004000;
     
     vme_pe0(vme_fu(PRIMARY), vme_mux(TOP_1, TOP_0), op); // real parts
+    //vme_pe0(vme_fu(SECONDARY), vme_mux(NONE, STAGING_0), 0x000c4000);
+    //vme_pe0(fu_reg(SECONDARY, B), 0xffffff);
+
     vme_pe2(vme_fu(PRIMARY), vme_mux(TOP_3, TOP_2), op); // imaginary parts
+    //vme_pe2(vme_fu(SECONDARY), vme_mux(NONE, STAGING_2), 0x000c4000);
+    //vme_pe2(fu_reg(SECONDARY, B), 0xffffff);
 
     vme_pe0(agu_top(MODE), VME_DEF_MODE, 0x800 - count);
     vme_pe0(agu_top(COUNT), VME_DEF_STEP, count - 1);
@@ -112,12 +122,17 @@ VME_LIB_CONTEXT_GENERATOR(butterflyGenerator, param, {
 
   {
     // lower leg (real and imaginary parts)
-    //const u32 op = fu_op(SUB_BACK_FROM_FRONT);
-    const u32 op = 0x00004000;
+    const u32 op = fu_op(SUB_RSHIFT);
+    //const u32 op = 0x00004000;
     
     vme_pe1(vme_fu(PRIMARY), vme_mux(TOP_0, TOP_1), op); // real parts
-    vme_pe3(vme_fu(PRIMARY), vme_mux(TOP_2, TOP_3), op); // imaginary parts
+    //vme_pe1(vme_fu(SECONDARY), vme_mux(NONE, STAGING_1), 0x000c4000);
+    //vme_pe1(fu_reg(SECONDARY, B), 0xffffff);
     
+    vme_pe3(vme_fu(PRIMARY), vme_mux(TOP_2, TOP_3), op); // imaginary parts
+    //vme_pe3(vme_fu(SECONDARY), vme_mux(NONE, STAGING_3), 0x000c4000);
+    //vme_pe3(fu_reg(SECONDARY, B), 0xffffff);
+        
     vme_pe1(agu_top(MODE), VME_DEF_MODE, stride);
     vme_pe1(agu_top(COUNT), VME_DEF_STEP, count - 1);
     
@@ -128,12 +143,22 @@ VME_LIB_CONTEXT_GENERATOR(butterflyGenerator, param, {
 
 
 // transferts
-static void twiddlesToVme(u32 src, u32 dst, u16 size) {
+static void memToVme(u32 src, u32 dst, u16 size) {
   
   vme_dma(MEMORY, ADDR, useg_mem(src));
   vme_dma(SPAD, OFFSET, dst);
   vme_dma(ITERATION, DIMS, size - 1);
   vme_dma(CTRL, VALUE, 0x40);
+  
+  meCoreDMACPrimWaitTransferFinish();
+}
+
+static void vmeToMem(u32 src, u32 dst, u16 size) {
+  
+  vme_dma(MEMORY, ADDR, useg_mem(dst));
+  vme_dma(SPAD, OFFSET, src);
+  vme_dma(ITERATION, DIMS, size - 1);
+  vme_dma(CTRL, VALUE, 0x48);
   
   meCoreDMACPrimWaitTransferFinish();
 }
@@ -154,6 +179,7 @@ static void stageToVme(u32 src, u32 dst, u16 stride, u16 points, u8 slice) {
 
 void processStage(void* butterfly) {
   
+  // todo: merge butterfly pre and post context transfers
   vmeLibStart();
   vmeLibLoadCustomContext(butterfly);
   vmeLibFinish();
@@ -161,7 +187,41 @@ void processStage(void* butterfly) {
   //vmeLibFinishAsync();
 }
 
-#define VME_CONTEXT_BYTE_COUNT (VME_CONTEXT_WORD_COUNT * 4)
+// tmp
+typedef struct Complex {
+  
+  u32 real;
+  u32 imag;
+} Complex;
+
+Complex scratchpadToEdram() {
+  
+  Complex complex {
+    0x40000000,
+    0x40000000 | (FFT_VALUE_COUNT * 4 * 2)
+  };
+  
+  const u32 scratchpadReal = VME_BASE_BUFF1_WOFF - FFT_STAGE_0_STRIDE;
+  const u32 scratchpadImag = VME_BASE_BUFF3_WOFF - FFT_STAGE_0_STRIDE;
+  vmeToMem(scratchpadReal, complex.real, FFT_VALUE_COUNT);
+  vmeToMem(scratchpadImag, complex.imag, FFT_VALUE_COUNT);
+  
+  // debug
+  //meCoreMemset((void*)0x44000000, 0, 8192*4*4);
+  //meCoreDcacheWritebackInvalidateAll();
+
+  /*
+  const u32 scratchpadReal = 0x04000000 + (VME_BASE_BUFF1_WOFF - FFT_STAGE_0_STRIDE) * 4;
+  const u32 scratchpadImag = 0x04000000 + (VME_BASE_BUFF3_WOFF - FFT_STAGE_0_STRIDE) * 4;
+  const u32 edramReal = 0;
+  const u32 edramImag = 0 | 0x800 * 4;//(FFT_VALUE_COUNT * 4 * 2);
+  meCoreMemcpy((void*)edramReal, (void*)scratchpadReal, FFT_VALUE_COUNT * 4);
+  meCoreMemcpy((void*)edramImag, (void*)scratchpadImag, FFT_VALUE_COUNT * 4);
+  meCoreDcacheWritebackInvalidateAll();
+  */
+  
+  return complex;
+}
 
 void meLibOnProcess(void) {
     
@@ -176,18 +236,18 @@ void meLibOnProcess(void) {
     FFT_STAGE_2_STRIDE, FFT_STAGE_3_STRIDE,
   };
   vmeLibGenContext(butterflyGenerator, butterfly0, (void*)&(bStrides[0]));
-  //vmeLibGenContext(butterflyGenerator, butterfly1, (void*)&(strides[1]));
-  //vmeLibGenContext(butterflyGenerator, butterfly2, (void*)&(strides[2]));
-  //vmeLibGenContext(butterflyGenerator, butterfly3, (void*)&(strides[3]));
+  vmeLibGenContext(butterflyGenerator, butterfly1, (void*)&(bStrides[1]));
+  vmeLibGenContext(butterflyGenerator, butterfly2, (void*)&(bStrides[2]));
+  vmeLibGenContext(butterflyGenerator, butterfly3, (void*)&(bStrides[3]));
 
   const int sIndex[] = { 0, 1, 2, 3 };
   vmeLibGenContext(lowerLegGenerator, lowerLeg0, (void*)&(sIndex[0]));
-  //vmeLibGenContext(lowerLegGenerator, lowerLeg1, (void*)&(sIndex[1]));
-  //vmeLibGenContext(lowerLegGenerator, lowerLeg2, (void*)&(sIndex[2]));
-  //vmeLibGenContext(lowerLegGenerator, lowerLeg3, (void*)&(sIndex[3]));
+  vmeLibGenContext(lowerLegGenerator, lowerLeg1, (void*)&(sIndex[1]));
+  vmeLibGenContext(lowerLegGenerator, lowerLeg2, (void*)&(sIndex[2]));
+  vmeLibGenContext(lowerLegGenerator, lowerLeg3, (void*)&(sIndex[3]));
   
-  #define rTwiddles _REAL_TWIDDLES
-  #define iTwiddles _IMAG_TWIDDLES
+  #define rTwiddles REAL_TWIDDLES
+  #define iTwiddles IMAG_TWIDDLES
   meCoreDcacheWritebackRange((void*)rTwiddles, sizeof(rTwiddles));
   meCoreDcacheWritebackRange((void*)iTwiddles, sizeof(iTwiddles));
   
@@ -212,12 +272,10 @@ void meLibOnProcess(void) {
   
   vmeLibEnable();
   vmeLibWipe();
-
-  twiddlesToVme((u32)rTwiddles, VME_TOP_BUFF0_WOFF + FFT_TWIDDLE_BASE_OFFSET, sizeof(rTwiddles) / 4);
-  twiddlesToVme((u32)iTwiddles, VME_TOP_BUFF2_WOFF + FFT_TWIDDLE_BASE_OFFSET, sizeof(iTwiddles) / 4);
   
+  memToVme((u32)rTwiddles, VME_TOP_BUFF0_WOFF + FFT_TWIDDLE_BASE_OFFSET, sizeof(rTwiddles) / 4);
+  memToVme((u32)iTwiddles, VME_TOP_BUFF2_WOFF + FFT_TWIDDLE_BASE_OFFSET, sizeof(iTwiddles) / 4);
   vmeLibDisable();
-
 
   /*
    * Dynamic
@@ -225,37 +283,59 @@ void meLibOnProcess(void) {
   
   vmeLibEnable();
 
+  // stage 0
+  {
+    stageToVme((u32)sampleReal, VME_TOP_BUFF1_WOFF, FFT_STAGE_0_STRIDE, FFT_VALUE_COUNT, 0);
+    stageToVme((u32)sampleImag, VME_TOP_BUFF3_WOFF, FFT_STAGE_0_STRIDE, FFT_VALUE_COUNT, 0);
+    processStage(vme_ctx(butterfly0));
+    //processStage(vme_ctx(lowerLeg0));
+  }
+  /*
   // stage 1
-  stageToVme((u32)sampleReal, VME_TOP_BUFF1_WOFF, FFT_STAGE_0_STRIDE, FFT_VALUE_COUNT, 0);
-  stageToVme((u32)sampleImag, VME_TOP_BUFF3_WOFF, FFT_STAGE_0_STRIDE, FFT_VALUE_COUNT, 0);
-  processStage(vme_ctx(butterfly0));
-  processStage(vme_ctx(lowerLeg0));
+  {
+    Complex complex = scratchpadToEdram();
+    stageToVme((u32)complex.real, VME_TOP_BUFF1_WOFF, FFT_STAGE_1_STRIDE, FFT_VALUE_COUNT, 0);
+    stageToVme((u32)complex.imag, VME_TOP_BUFF3_WOFF, FFT_STAGE_1_STRIDE, FFT_VALUE_COUNT, 0);
+    processStage(vme_ctx(butterfly1));
+    processStage(vme_ctx(lowerLeg1));
+  }
 
-
-/*
   // stage 2
-  stageToVme((u32)sample, 4, POINT_COUNT, 0);
-  processStage(vme_ctx(butterfly1));
-
+  {
+    Complex complex = scratchpadToEdram();
+    stageToVme((u32)complex.real, VME_TOP_BUFF1_WOFF, FFT_STAGE_2_STRIDE, FFT_VALUE_COUNT, 0);
+    stageToVme((u32)complex.imag, VME_TOP_BUFF3_WOFF, FFT_STAGE_2_STRIDE, FFT_VALUE_COUNT, 0);
+    processStage(vme_ctx(butterfly2));
+    processStage(vme_ctx(lowerLeg2));
+  }
+  */
+/*
   // stage 3
-  stageToVme((u32)sample, 2, POINT_COUNT, 0);
-  processStage(vme_ctx(butterfly2));
-
-  // stage 4
-  stageToVme((u32)sample, 1, POINT_COUNT, 0);
-  processStage(vme_ctx(butterfly3));
+  {
+    Complex complex = scratchpadToEdram();
+    stageToVme((u32)complex.real, VME_TOP_BUFF1_WOFF, FFT_STAGE_3_STRIDE, FFT_VALUE_COUNT, 0);
+    stageToVme((u32)complex.imag, VME_TOP_BUFF3_WOFF, FFT_STAGE_3_STRIDE, FFT_VALUE_COUNT, 0);
+    processStage(vme_ctx(butterfly3));
+    processStage(vme_ctx(lowerLeg3));
+  }
 */
-
+//
   // debug
-//  vmeDebugFillWith(VME_BASE_BUFFERS);
+  //vmeDebugFillWith(VME_BASE_BUFFERS);
+  
+  //vmeDebugFillWith(0);
   
   //vmeDebugFillAtWith(0, VME_BASE_BUFF1_WOFF - FFT_STAGE_0_STRIDE);
   //vmeDebugFillAtWith(1, VME_BASE_BUFF3_WOFF - FFT_STAGE_0_STRIDE);
-
+/*
   vmeDebugFillAtWith(0, VME_BASE_BUFF0_WOFF + 32);
   vmeDebugFillAtWith(1, VME_BASE_BUFF1_WOFF + 32);
   vmeDebugFillAtWith(2, VME_BASE_BUFF2_WOFF + 32);
   vmeDebugFillAtWith(3, VME_BASE_BUFF3_WOFF + 32);
+*/
+
+  vmeDebugFillAtWith(0, VME_BASE_BUFF1_WOFF - FFT_STAGE_0_STRIDE);
+  vmeDebugFillAtWith(1, VME_BASE_BUFF3_WOFF - FFT_STAGE_0_STRIDE);
 
   vmeLibDisable();
 
