@@ -10,6 +10,9 @@ PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 VME_DEBUG_SET_BUFFER_WORD_COUNT(64);
 
+#define ADD_RSHIFT ADD_IBUF_RSHIFT
+#define SUB_RSHIFT SUB_BACK_FROM_FRONT_RSHIFT
+
 #define FFT_POINT_COUNT (16)
 #define FFT_VALUE_COUNT FFT_POINT_COUNT
 
@@ -30,8 +33,6 @@ meLibSetSharedUncached32(10);
 
 //
 VME_LIB_CONTEXT_GENERATOR(lowerLegGenerator, param, {
-
-  //vme_set(ENABLE, FU_1, 0b0100 << 28);
   
   const int tOffset[] = {
     
@@ -39,9 +40,13 @@ VME_LIB_CONTEXT_GENERATOR(lowerLegGenerator, param, {
     FFT_TWIDDLE_2_OFFSET, FFT_TWIDDLE_3_OFFSET,
   };
   
+  vme_set(ENABLE, FU_1, 0b0101 << 28);
+
   vme_icn(AGU_TOP, 0x0000);
   vme_icn(AGU_BASE, 0x1010);
-  vme_icn(AGU_WRITE, 0x0000);
+  
+  //vme_icn(AGU_WRITE, 0x0000);
+  vme_icn(AGU_WRITE, 0x1010);
 
   const int count = FFT_STAGE_0_STRIDE;
   
@@ -50,26 +55,35 @@ VME_LIB_CONTEXT_GENERATOR(lowerLegGenerator, param, {
   const int tStride = (FFT_VALUE_COUNT >> (stageId + 1));
 
   {
-    const u32 op = 0x00004000; //fu_op(MUL_VEC_RSHIFT_BIAS);
+    const u32 op = 0x00004000;
+    //const u32 op = fu_op(MUL_VEC_RSHIFT_BIAS);
     
     vme_pe0(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_0), op); // real (LowerLeg) vs real (Twiddles)
     vme_pe1(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_2), op); // imag (LowerLeg) vs imag (Twiddles)
-    //vme_pe2(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_2), op); // real (LowerLeg) vs imag (Twiddles)
-    //vme_pe3(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_0), op); // imag (LowerLeg) vs real (Twiddles)
-
+    vme_pe2(vme_fu(PRIMARY), vme_mux(BASE_1, TOP_2), op); // real (LowerLeg) vs imag (Twiddles)
+    vme_pe3(vme_fu(PRIMARY), vme_mux(BASE_3, TOP_0), op); // imag (LowerLeg) vs real (Twiddles)
+    
     vme_pe0(agu_top(MODE), agu_mode(2), FFT_TWIDDLE_BASE_OFFSET + offset);
     vme_pe0(agu_top(COUNT), VME_DEF_STEP, (count - 1));
     vme_pe0(agu_top(INNER_0),  0x00010000, tStride - 1);
     vme_pe0(agu_top(FORMAT_0), 0x00020000);
     
-    vme_pe1(agu_base(MODE), VME_DEF_MODE, count);
+    vme_pe1(agu_base(MODE), VME_DEF_MODE);
     vme_pe1(agu_base(COUNT), VME_DEF_STEP, (count - 1));
     
     //
-    vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6, 32); // todo
-    vme_pe0(agu_write(COUNT), VME_DEF_STEP, (count - 1));
+    //vme_pe0(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_6, 32); // todo
+    //vme_pe0(agu_write(COUNT), VME_DEF_STEP, (count - 1));
   }
   
+  {
+    vme_pe1(vme_fu(SECONDARY), vme_mux(STAGING_0, STAGING_1), fu_op(SUB_RSHIFT));
+    vme_pe3(vme_fu(SECONDARY), vme_mux(STAGING_2, STAGING_3), fu_op(ADD_RSHIFT));
+    
+    vme_pe1(agu_write(MODE), VME_DEF_MODE, VME_CYCLE_9, 32); // todo
+    vme_pe1(agu_write(COUNT), VME_DEF_STEP, (count - 1));
+  }
+
 });
 
 //
@@ -233,14 +247,16 @@ void meLibOnProcess(void) {
 */
 
   // debug
-  // vmeDebugFillWith(VME_BASE_BUFFERS);
+//  vmeDebugFillWith(VME_BASE_BUFFERS);
   
   //vmeDebugFillAtWith(0, VME_BASE_BUFF1_WOFF - FFT_STAGE_0_STRIDE);
   //vmeDebugFillAtWith(1, VME_BASE_BUFF3_WOFF - FFT_STAGE_0_STRIDE);
 
   vmeDebugFillAtWith(0, VME_BASE_BUFF0_WOFF + 32);
   vmeDebugFillAtWith(1, VME_BASE_BUFF1_WOFF + 32);
-    
+  vmeDebugFillAtWith(2, VME_BASE_BUFF2_WOFF + 32);
+  vmeDebugFillAtWith(3, VME_BASE_BUFF3_WOFF + 32);
+
   vmeLibDisable();
 
   while (1) {
