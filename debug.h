@@ -76,10 +76,8 @@ static inline void vmeDebugDump(const char* const path,
 #define vmeDebugGetValue(index, offset) \
   (((u32*)&(vmeDebugBuffers[VME_DEBUG_BUFFER_WORD_COUNT * (index)]))[offset])
 
-#define vmeDebugDisplayBuffer(digit, index, x, y) {                            \
+#define _vmeDebugDisplayBuffer(digit, index, x, y) {                           \
                                                                                \
-  char format[36] = "0x%08lx, 0x%08lx, 0x%08lx, 0x%08lx,";                     \
-  format[4] = format[13] = format[22] = format[31] = digit;                    \
   const int count = VME_DEBUG_BUFFER_WORD_COUNT;                               \
   const u32 mask = (digit == VME_DEBUG_DIGIT_8) ?                              \
     0xFFFFFFFFu : ((1u << ((digit - '0') * 4)) - 1u);                          \
@@ -89,6 +87,20 @@ static inline void vmeDebugDump(const char* const path,
     pspDebugScreenPrintf(format, data[i+0] & mask, data[i+1] & mask,           \
       data[i+2] & mask, data[i+3] & mask);                                     \
   }                                                                            \
+}
+
+#define vmeDebugDisplayBuffer(digit, index, x, y) {                            \
+                                                                               \
+  char format[36] = "0x%08lx, 0x%08lx, 0x%08lx, 0x%08lx,";                     \
+  format[4] = format[13] = format[22] = format[31] = digit;                    \
+  _vmeDebugDisplayBuffer(digit, index, x, y);                                  \
+}
+
+#define vmeDebugDisplayBufferWithSpace(digit, index, x, y) {                   \
+                                                                               \
+  char format[28] = "%8lxh, %8lxh, %8lxh, %8lxh,";                         \
+  format[1] = format[8] = format[15] = format[22] = digit;                    \
+  _vmeDebugDisplayBuffer(digit, index, x, y);                                  \
 }
 
 #define vmeDebugFillWith(buffer) {                                             \
