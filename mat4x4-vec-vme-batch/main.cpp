@@ -45,7 +45,59 @@ volatile u32 __attribute__((aligned(64))) sharedRes[VECTOR_COUNT * 16] = {0};
  */
 VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   
+  vme_icn(AGU_TOP, 0x4200);
+  vme_icn(AGU_BASE, 0x4040);
+  vme_icn(AGU_WRITE, 0x3240);
   
+  // VMAC between vectors and 4x4 matrix
+  vme_pe0(vme_fu(PRIMARY), vme_mux(TOP_0, TOP_1), 0x240 << 12); // staging 0
+
+  // AGU 'Read' for the input matrix
+  {
+    const int count = (16 - 1);
+    vme_pe0(agu_top(MODE), VME_DEF_MODE);
+    vme_pe0(agu_top(COUNT), VME_DEF_STEP | count);
+    vme_pe0(agu_top(INNER_0), count << 16, 1);
+    vme_pe0(agu_top(FORMAT_0), VME_RING_TOKEN);
+  }
+ 
+  // AGU 'Read' for the 4 word accumulator cancel mask selector
+  {
+    const int count = (4 - 1);
+    vme_pe2(agu_top(MODE), VME_DEF_MODE);
+    vme_pe2(agu_top(COUNT), VME_DEF_STEP | count);
+    vme_pe2(agu_top(INNER_0), count << 16, 1);
+    vme_pe2(agu_top(FORMAT_0), VME_RING_TOKEN);
+  }
+  
+  const int count = (32 - 1);
+  const int lostCycles = 12;
+  
+  // AGUs 'Write'
+  vme_pe2(agu_write(MODE), VME_DEF_MODE);
+  vme_pe2(agu_write(COUNT),  VME_DEF_STEP, count + lostCycles);
+  vme_pe2(agu_write(FORMAT_0), 1);
+  vme_pe2(agu_write(FORMAT_1), VME_END_TOKEN);
+  
+  vme_pe0(agu_write(MODE), VME_DEF_MODE);
+  vme_pe0(agu_write(COUNT),  VME_DEF_STEP, count + lostCycles);
+  vme_pe0(agu_write(FORMAT_0), 6);
+  vme_pe0(agu_write(FORMAT_1), VME_END_TOKEN);
+  
+  // AGUs 'Read' for intermediate buffers
+  vme_pe0(agu_base(MODE), VME_DEF_MODE);
+  vme_pe0(agu_base(COUNT),  VME_DEF_STEP, count + lostCycles);
+  
+  // Apply a logical AND between the cancel mask selector and the full VMAC result
+  vme_pe1(vme_fu(PRIMARY), vme_mux(TOP_2, STAGING_0), 0x0c1 << 12, 0x000); // staging 4
+
+  // Fill the gaps of the accumulator canceler with a running max
+  vme_pe2(vme_fu(PRIMARY), vme_mux(NONE, STAGING_1), 0x100 << 12, 0x000); // staging 1
+  
+  // Output, substract to cancel accumulation excess
+  vme_pe3(vme_fu(PRIMARY), vme_mux(BASE_0, BASE_2), 0x048 << 12, 0x000);
+  vme_pe3(agu_write(MODE), VME_DEF_MODE, vme_cyc(0x12));
+  vme_pe3(agu_write(COUNT),  VME_DEF_STEP, count);
 });
 
 static void uploadBatchOfVectors(u32 src, u32 dst, int count) {
