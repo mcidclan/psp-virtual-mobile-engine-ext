@@ -12,10 +12,15 @@ ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 
 #define BATCH_COUNT 4
 #define VECTOR_COUNT 8
+#define VECTOR_WORD_COUNT (VECTOR_COUNT * 4)
 
 meLibSetSharedUncached32(10);
 #define meCounter    (meLibSharedMemory[1])
 #define sharedIdx    (meLibSharedMemory[2])
+
+volatile const u32 __attribute__((aligned(64))) cancelMask[4] = {
+  0, 0, 0xffffffff, 0
+};
 
 volatile u32 __attribute__((aligned(64))) sharedMat[16] = {
   
@@ -25,8 +30,19 @@ volatile u32 __attribute__((aligned(64))) sharedMat[16] = {
   0x0c, 0x0d, 0x0e, 0x0f,
 };
 
-volatile u32 __attribute__((aligned(64))) sharedVec[VECTOR_COUNT * 4] = {
+volatile u32 __attribute__((aligned(64))) sharedVec[VECTOR_WORD_COUNT] = {
 
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+
+  /*
   0x01, 0x02, 0x03, 0x04,
   0x05, 0x06, 0x07, 0x08,
   0x09, 0x0a, 0x0b, 0x0c,
@@ -36,9 +52,10 @@ volatile u32 __attribute__((aligned(64))) sharedVec[VECTOR_COUNT * 4] = {
   0x15, 0x16, 0x17, 0x18,
   0x19, 0x1a, 0x1b, 0x1c,
   0x1d, 0x1e, 0x1f, 0x20,
+  */
 };
 
-volatile u32 __attribute__((aligned(64))) sharedRes[VECTOR_COUNT * 16] = {0};
+volatile u32 __attribute__((aligned(64))) sharedRes[VECTOR_WORD_COUNT * 4] = {0};
 
 /*
  * 
@@ -49,14 +66,14 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   vme_icn(AGU_BASE, 0x4040);
   vme_icn(AGU_WRITE, 0x3240);
   
-  // VMAC between vectors and 4x4 matrix
+  // VMAC between 4x4 matrix and vectors
   vme_pe0(vme_fu(PRIMARY), vme_mux(TOP_0, TOP_1), 0x240 << 12); // staging 0
 
   // AGU 'Read' for the input matrix
   {
     const int count = (16 - 1);
     vme_pe0(agu_top(MODE), VME_DEF_MODE);
-    vme_pe0(agu_top(COUNT), VME_DEF_STEP | count);
+    vme_pe0(agu_top(COUNT), VME_DEF_STEP, count);
     vme_pe0(agu_top(INNER_0), count << 16, 1);
     vme_pe0(agu_top(FORMAT_0), VME_RING_TOKEN);
   }
@@ -65,12 +82,12 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   {
     const int count = (4 - 1);
     vme_pe2(agu_top(MODE), VME_DEF_MODE);
-    vme_pe2(agu_top(COUNT), VME_DEF_STEP | count);
+    vme_pe2(agu_top(COUNT), VME_DEF_STEP, count);
     vme_pe2(agu_top(INNER_0), count << 16, 1);
     vme_pe2(agu_top(FORMAT_0), VME_RING_TOKEN);
   }
   
-  const int count = (32 - 1);
+  const int count = (VECTOR_COUNT * 16 - 1);
   const int lostCycles = 12;
   
   // AGUs 'Write'
@@ -100,10 +117,10 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   vme_pe3(agu_write(COUNT),  VME_DEF_STEP, count);
 });
 
-static void uploadBatchOfVectors(u32 src, u32 dst, int count) {
+static void uploadBatchOfVectors(void* const src, u32 dst, int count) {
 
   vme_dma(MEMORY, ADDR, useg_mem((u32)src));
-
+  
   vme_dma(ITERATION, DIMS, (count - 1), 0);
   vme_dma(ITERATION, STEP, 4);
   vme_dma(GROUP, SIZE, (4 - 1));
@@ -122,24 +139,42 @@ static void uploadBatchOfVectors(u32 src, u32 dst, int count) {
   meCoreDMACPrimWaitTransferFinish();
 }
 
+void downloadBatchOfVectors(u32 src, void* const dst, int count) {
+  
+  vme_dma(MEMORY, ADDR, useg_mem((u32)dst));
+  
+  vme_dma(SPAD, OFFSET, src + 3);
+  vme_dma(ITERATION, DIMS, (count - 1), (4 - 1));
+  vme_dma(ITERATION, STEP, 4);
+  vme_dma(GROUP, SIZE, 0);
+  vme_dma(GROUP, STEPS, 0);
+  
+  vme_dma(CTRL, VALUE, 0x58);
+  meCoreDMACPrimWaitTransferFinish();
+}
+
 void meLibOnProcess(void) {
 
-  meCoreDcacheWritebackInvalidateAll();
   meLibExceptionHandlerInit(0);
   
-  //void* const mulMatCtx = setupMulMatCtx(nullptr);
+  void* const mulMatCtx = setupMulMatCtx(nullptr);
   
   vmeLibEnable();
   vmeLibWipe();
+
+  vmeLibSendCustomContext(mulMatCtx);
   
-  const int size = ((sizeof(sharedVec) + 63) & ~63);
-  meCoreDcacheWritebackRange((void*)sharedVec, size); // todo: use uncached instead
+  vmeLibMemoryToRingBuffer((void*)sharedMat, VME_TOP_BUFF0_WOFF, sizeof(sharedMat) / 4);
+  vmeLibMemoryToRingBuffer((void*)cancelMask, VME_TOP_BUFF2_WOFF, sizeof(cancelMask) / 4);
   
-  uploadBatchOfVectors((u32)sharedVec, VME_BASE_BUFF0_WOFF, (sizeof(sharedRes) / 4));
+  uploadBatchOfVectors((void*)sharedVec, VME_TOP_BUFF1_WOFF, VECTOR_WORD_COUNT);
  
-  // tmp debug
-  meCoreMemcpy((void*)sharedRes, (void*)VME_BASE_BUFFER_0, sizeof(sharedRes));
+  vmeLibTrigger();
+  meCoreDMACPrimWaitVMEFinish();
+
+  downloadBatchOfVectors(VME_BASE_BUFF3_WOFF, (void*)sharedRes, VECTOR_WORD_COUNT);
   meCoreDcacheWritebackRange((void*)sharedRes, sizeof(sharedRes));
+
   vmeLibDisable();
   
   while (1) {

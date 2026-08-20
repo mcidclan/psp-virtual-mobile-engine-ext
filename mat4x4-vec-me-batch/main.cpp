@@ -103,8 +103,8 @@ void meLibOnProcess(void) {
   vmeLibEnable();
   vmeLibWipe();
   
-  const int size = ((sizeof(sharedVec) + 63) & ~63);
-  meCoreDcacheWritebackRange((void*)sharedVec, size);
+  //const int size = ((sizeof(sharedVec) + 63) & ~63);
+  //meCoreDcacheWritebackRange((void*)sharedVec, size);
   vmeLibMemoryToRingBuffer((void*)sharedVec, 0x100, sizeof(sharedVec) / 4);
   vmeSetDistributed4x4((void*)sharedMat);
   

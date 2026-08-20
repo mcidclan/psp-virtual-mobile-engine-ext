@@ -27,6 +27,10 @@ You can check the mat4x4 multiplied by a single vector example to see how to tak
 Use Triangle or Cross to change the input vector value.
 Use Home to exit. It will dump the full VME scratchpad, allowing you to visualize the current context pipeline.
 
+### Special Note
+
+As this is new work that has required time and effort, and which could be useful to other people and projects, please consider at least leaving a reference to the repository in your projects. This would allow people to trace its history and refer back to the original sources and sample code for a better understanding of the work related to the VME.
+
 ## Disclamer
 
 This project and code are provided as-is without warranty. Users assume full responsibility for any implementation or consequences. Use at your own discretion and risk

@@ -14,6 +14,10 @@ The computation applied here is a simple increase of the red channel component, 
 
 Make sure to place `mcid64x64.png` (or another 64x64 png image) in the same folder as the EBOOT.
 
+#### Special Note
+
+As this is new work that has required time and effort, and which could be useful to other people and projects, please consider at least leaving a reference to the repository in your projects. This would allow people to trace its history and refer back to the original sources and sample code for a better understanding of the work related to the VME.
+
 ## Disclamer
 
 This project and code are provided as-is without warranty. Users assume full responsibility for any implementation or consequences. Use at your own discretion and risk

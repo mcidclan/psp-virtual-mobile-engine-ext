@@ -6,6 +6,11 @@ This repository contains various code examples demonstrating how to use the Virt
 
 Make sure you have `psp-media-engine-custom-core` installed and up to date, see below.
 
+### Special Note
+
+As this is new work that has required time and effort, and which could be useful to other people and projects, please consider at least leaving a reference to the repository in your projects. This would allow people to trace its history and refer back to the original sources and sample code for a better understanding of the work related to the VME.
+
+
 ## Contribution Guidelines
 
 ### AI-assisted development

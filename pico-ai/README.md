@@ -42,6 +42,10 @@ See [Combo Groups](recorder/combo-groups.md)
 
 You can find default recorded samples for the first group of combos, and its related model in the recorder/generated folder. Noting that to get better results, you'll have to train your own model and record your own samples by performing your own gestures on your device.
 
+## Special Note
+
+As this is new work that has required time and effort, and which could be useful to other people and projects, please consider at least leaving a reference to the repository in your projects. This would allow people to trace its history and refer back to the original sources and sample code for a better understanding of the work related to the VME.
+
 ## Pipelines and Architecture
 
 See [Pipelines and Architecture](pipeline-and-architecture.md)

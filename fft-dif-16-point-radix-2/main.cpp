@@ -226,8 +226,8 @@ void meLibOnProcess(void) {
   
   #define rTwiddles REAL_TWIDDLES
   #define iTwiddles IMAG_TWIDDLES
-  meCoreDcacheWritebackRange((void*)rTwiddles, sizeof(rTwiddles));
-  meCoreDcacheWritebackRange((void*)iTwiddles, sizeof(iTwiddles));
+  meCoreDcacheWritebackRange((void*)rTwiddles, sizeof(rTwiddles)); // todo: remove
+  meCoreDcacheWritebackRange((void*)iTwiddles, sizeof(iTwiddles)); // todo: remove
 
   meCoreDcacheWritebackRange((void*)sampleImag, SAMPLE_BYTE_COUNT);
   
