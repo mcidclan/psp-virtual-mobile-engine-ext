@@ -10,9 +10,9 @@ PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_VFPU | PSP_THREAD_ATTR_USER);
 
 ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 
-#define BATCH_COUNT 4
-#define VECTOR_COUNT 8
-#define VECTOR_WORD_COUNT (VECTOR_COUNT * 4)
+#define VECTOR_COUNT 16
+#define VECTOR_BATCH_WORD_COUNT (VECTOR_COUNT * 4)
+#define VECTOR_MAC_WORD_COUNT 16
 
 meLibSetSharedUncached32(10);
 #define meCounter    (meLibSharedMemory[1])
@@ -24,48 +24,65 @@ volatile const u32 __attribute__((aligned(64))) cancelMask[4] = {
 
 volatile u32 __attribute__((aligned(64))) sharedMat[16] = {
   
-  0x00, 0x01, 0x02, 0x03,
-  0x04, 0x05, 0x06, 0x07,
-  0x08, 0x09, 0x0a, 0x0b,
-  0x0c, 0x0d, 0x0e, 0x0f,
+  0x00006EDA, 0xFFFFC000, 0x00000000, 0x00000000,
+  0x00004000, 0x00006EDA, 0x00000000, 0x00000000,
+  0x00000000, 0x00000000, 0x00007FFF, 0x00000000,
+  0x00000000, 0x00000000, 0x00000000, 0x00007FFF,
+  
+  //0x01, 0x00, 0x00, 0x00,
+  //0x00, 0x01, 0x00, 0x00,
+  //0x00, 0x00, 0x01, 0x00,
+  //0x00, 0x00, 0x00, 0x01,
 };
 
-volatile u32 __attribute__((aligned(64))) sharedVec[VECTOR_WORD_COUNT] = {
+volatile u32 __attribute__((aligned(64))) sharedVec[VECTOR_BATCH_WORD_COUNT] = {
 
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
+  0, 0, 0, 0, // lost vector
 
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
+0x00000001, 0x00000002, 0x00000003, 0x00000004,
+0x00000005, 0x00000000, 0x00000000, 0x00000001,
+0x00000000, 0x00000005, 0x00000000, 0x00000001,
+0x0000000A, 0x0000000A, 0x00000001, 0x00000001,
+0xFFFFFFFD, 0x00000004, 0x00000002, 0x00000001,
+0x00000007, 0xFFFFFFFE, 0x00000005, 0x00000001,
+0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000001,
+
+0x00000064, 0x00000000, 0x00000000, 0x00000001,
+0x00000000, 0xFFFFFFCE, 0x00000000, 0x00000001,
+0x00000008, 0x00000008, 0x00000008, 0x00000001,
+0xFFFFFFEC, 0x0000000F, 0x00000003, 0x00000001,
+0x00000002, 0x00000002, 0x00000002, 0x00000002,
+0x00000000, 0x00000000, 0x00000000, 0x00000001,
+0xFFFFFF9C, 0xFFFFFF9C, 0x0000000A, 0x00000001,
+0x00000032, 0xFFFFFFE7, 0x00000007, 0x00000001,
+
 
   /*
   0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+  0x01, 0x02, 0x03, 0x04,
+
   0x05, 0x06, 0x07, 0x08,
-  0x09, 0x0a, 0x0b, 0x0c,
-  0x0d, 0x0e, 0x0f, 0x10,
-  
-  0x11, 0x12, 0x13, 0x14,
-  0x15, 0x16, 0x17, 0x18,
-  0x19, 0x1a, 0x1b, 0x1c,
-  0x1d, 0x1e, 0x1f, 0x20,
+  0x05, 0x06, 0x07, 0x08,
+  0x05, 0x06, 0x07, 0x08,
+  0x05, 0x06, 0x07, 0x08,
   */
 };
 
-volatile u32 __attribute__((aligned(64))) sharedRes[VECTOR_WORD_COUNT * 4] = {0};
+volatile u32 __attribute__((aligned(64))) sharedRes[VECTOR_BATCH_WORD_COUNT] = {0};
 
 /*
- * 
+ * Q1.15 mat4x4 vs batch of vectors
  */
 VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   
-  vme_icn(AGU_TOP, 0x4200);
+  vme_icn(AGU_TOP, 0x4210);
   vme_icn(AGU_BASE, 0x4040);
   vme_icn(AGU_WRITE, 0x3240);
   
+  vme_set(ENABLE, FU_1, 0b0001 << 28);
+
   // VMAC between 4x4 matrix and vectors
   vme_pe0(vme_fu(PRIMARY), vme_mux(TOP_0, TOP_1), 0x240 << 12); // staging 0
 
@@ -88,6 +105,10 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   }
   
   const int count = (VECTOR_COUNT * 16 - 1);
+  
+  vme_pe1(agu_top(MODE), VME_DEF_MODE);
+  vme_pe1(agu_top(COUNT), VME_DEF_STEP, count);
+
   const int lostCycles = 12;
   
   // AGUs 'Write'
@@ -98,22 +119,25 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   
   vme_pe0(agu_write(MODE), VME_DEF_MODE);
   vme_pe0(agu_write(COUNT),  VME_DEF_STEP, count + lostCycles);
-  vme_pe0(agu_write(FORMAT_0), 6);
+  vme_pe0(agu_write(FORMAT_0), 5);
   vme_pe0(agu_write(FORMAT_1), VME_END_TOKEN);
   
   // AGUs 'Read' for intermediate buffers
   vme_pe0(agu_base(MODE), VME_DEF_MODE);
   vme_pe0(agu_base(COUNT),  VME_DEF_STEP, count + lostCycles);
   
-  // Apply a logical AND between the cancel mask selector and the full VMAC result
-  vme_pe1(vme_fu(PRIMARY), vme_mux(TOP_2, STAGING_0), 0x0c1 << 12, 0x000); // staging 4
+  // Build the sparse canceler by applying a logical AND between
+  // the cancel mask selector and the full VMAC result
+  vme_pe1(vme_fu(PRIMARY), vme_mux(TOP_2, STAGING_0), 0x0c0 << 12); // staging 1
 
-  // Fill the gaps of the accumulator canceler with a running max
-  vme_pe2(vme_fu(PRIMARY), vme_mux(NONE, STAGING_1), 0x100 << 12, 0x000); // staging 1
+  // Fill the gaps of the accumulator canceler using a cumulative sum
+  // followed by a delayed self-subtraction
+  vme_pe2(vme_fu(PRIMARY), vme_mux(NONE, STAGING_1), 0x250 << 12); // staging 2
+  vme_pe3(vme_fu(PRIMARY), vme_mux(STAGING_2, BASE_2), 0x48 << 12); // staging 3
   
-  // Output, substract to cancel accumulation excess
-  vme_pe3(vme_fu(PRIMARY), vme_mux(BASE_0, BASE_2), 0x048 << 12, 0x000);
-  vme_pe3(agu_write(MODE), VME_DEF_MODE, vme_cyc(0x12));
+  // Output, subtract to cancel accumulation excess
+  vme_pe3(vme_fu(SECONDARY), vme_mux(BASE_0, STAGING_3), 0x048 << 12);
+  vme_pe3(agu_write(MODE), VME_DEF_MODE, vme_cyc((0x11)));
   vme_pe3(agu_write(COUNT),  VME_DEF_STEP, count);
 });
 
@@ -142,7 +166,7 @@ static void uploadBatchOfVectors(void* const src, u32 dst, int count) {
 void downloadBatchOfVectors(u32 src, void* const dst, int count) {
   
   vme_dma(MEMORY, ADDR, useg_mem((u32)dst));
-  
+    
   vme_dma(SPAD, OFFSET, src + 3);
   vme_dma(ITERATION, DIMS, (count - 1), (4 - 1));
   vme_dma(ITERATION, STEP, 4);
@@ -163,73 +187,66 @@ void meLibOnProcess(void) {
   vmeLibWipe();
 
   vmeLibSendCustomContext(mulMatCtx);
-  
   vmeLibMemoryToRingBuffer((void*)sharedMat, VME_TOP_BUFF0_WOFF, sizeof(sharedMat) / 4);
   vmeLibMemoryToRingBuffer((void*)cancelMask, VME_TOP_BUFF2_WOFF, sizeof(cancelMask) / 4);
   
-  uploadBatchOfVectors((void*)sharedVec, VME_TOP_BUFF1_WOFF, VECTOR_WORD_COUNT);
- 
-  vmeLibTrigger();
-  meCoreDMACPrimWaitVMEFinish();
-
-  downloadBatchOfVectors(VME_BASE_BUFF3_WOFF, (void*)sharedRes, VECTOR_WORD_COUNT);
-  meCoreDcacheWritebackRange((void*)sharedRes, sizeof(sharedRes));
-
+  uploadBatchOfVectors((void*)sharedVec, VME_TOP_BUFF1_WOFF, VECTOR_BATCH_WORD_COUNT);
   vmeLibDisable();
-  
+
+  const int lostVector = 1;
   while (1) {
+
+    vmeLibEnable();
+    vmeLibTrigger();
+    meCoreDMACPrimWaitVMEFinish();
+    vmeLibDisable();
+
+    if (meCoreHwMutexTryLock() >= 0) {
+
+      meCoreBusClockEnableDMACPrimMux();
+      const u32 src = VME_BASE_BUFF3_WOFF + lostVector * VECTOR_MAC_WORD_COUNT;
+      downloadBatchOfVectors(src, (void*)sharedRes, VECTOR_BATCH_WORD_COUNT - lostVector);
+      meCoreBusClockDisableDMACPrimMux();
+      meCoreHwMutexUnlock();
+    }
     
+    meLibDelayPipeline();
     meCounter += 1;
   }
 }
-
+  
 void displayVectors() {
 
-  sceKernelDcacheInvalidateRange((void*)sharedRes, sizeof(sharedRes));
-  const u32* const out = (u32*)sharedRes;
+  while (meLibCallHwMutexTryLock() < 0) {
+    sceKernelDelayThread(1);
+  }
+  
+  const u32* const out = (u32*)(0x40000000 | (u32)sharedRes);
 
   pspDebugScreenSetXY(0, 0);
   pspDebugScreenPrintf("VME Output Vectors:\n");
   
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[0], out[1], out[2], out[3]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[4], out[5], out[6], out[7]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[8], out[9], out[10], out[11]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[12], out[13], out[14], out[15]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[0], out[1], out[2], out[3]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[4], out[5], out[6], out[7]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[8], out[9], out[10], out[11]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[12], out[13], out[14], out[15]);
   
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[16], out[17], out[18], out[19]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[20], out[21], out[22], out[23]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[24], out[25], out[26], out[27]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[28], out[29], out[30], out[31]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[16], out[17], out[18], out[19]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[20], out[21], out[22], out[23]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[24], out[25], out[26], out[27]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[28], out[29], out[30], out[31]);
   
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[32], out[33], out[34], out[35]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[36], out[37], out[38], out[39]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[40], out[41], out[42], out[43]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[44], out[45], out[46], out[47]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[32], out[33], out[34], out[35]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[36], out[37], out[38], out[39]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[40], out[41], out[42], out[43]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[44], out[45], out[46], out[47]);
   
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[48], out[49], out[50], out[51]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[52], out[53], out[54], out[55]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[56], out[57], out[58], out[59]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[60], out[61], out[62], out[63]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[48], out[49], out[50], out[51]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[52], out[53], out[54], out[55]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[56], out[57], out[58], out[59]);
+  pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[60], out[61], out[62], out[63]);
   
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[64], out[65], out[66], out[67]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[68], out[69], out[70], out[71]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[72], out[73], out[74], out[75]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[76], out[77], out[78], out[79]);
-  
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[80], out[81], out[82], out[83]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[84], out[85], out[86], out[87]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[88], out[89], out[90], out[91]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[92], out[93], out[94], out[95]);
-
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[96], out[97], out[98], out[99]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[100], out[101], out[102], out[103]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[104], out[105], out[106], out[107]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[108], out[109], out[110], out[111]);
-
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[112], out[113], out[114], out[115]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[116], out[117], out[118], out[119]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[120], out[121], out[122], out[123]);
-  pspDebugScreenPrintf("%lx, %lx, %lx, %lx\n", out[124], out[125], out[126], out[127]);
+  meLibCallHwMutexUnlock();
 }
 
 

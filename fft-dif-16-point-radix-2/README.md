@@ -95,7 +95,7 @@ Use `TRIANGLE` and `CROSS` to switch between the stimulus patterns.
 
 ### Special Note
 
-As this is new work that has required time and effort, and which could be useful to other people and projects, please consider at least leaving a reference to the repository in your projects. This would allow people to trace its history and refer back to the original sources and sample code for a better understanding of the work related to the VME.
+As this work has required time and effort and is still in a WIP state, and as it could be useful to other people and projects, please consider at least leaving a reference to the repository in your projects. This would allow people to trace its history and refer back to the original sources and sample code for a better understanding of the work related to the VME.  
 
 ## Notes, DIT vs DIF
 
