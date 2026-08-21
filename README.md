@@ -8,6 +8,19 @@ As the work on this project and around the VME in general has required time and 
 
 Make sure you have `psp-media-engine-custom-core` installed and up to date before building the sample code, see below.
 
+## Sample Code
+
+[fft-dif-16-point-radix-2](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/fft-dif-16-point-radix-2/README.md)  
+[mat4x4-vec-distributed](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/mat4x4-vec-distributed/README.md)  
+[mat4x4-vec-me-batch](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-vec-me-batch/README.md)  
+[mat4x4-vec-reset-acc](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-vec-reset-acc/README.md)  
+[mat4x4-vec-vme-batch](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-vec-vme-batch/README.md)  
+[pico-ai](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/pico-ai/README.md)  
+[poc-from-custom-core](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/poc-from-custom-core/README.md)  
+[saturate-clamp-second-fu](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/saturate-clamp-second-fu/README.md)  
+[switching-ram-context](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/switching-ram-context)  
+[texture-processing](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/texture-processing)  
+
 ## Contribution Guidelines
 
 ### AI-assisted development
