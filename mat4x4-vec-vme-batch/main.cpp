@@ -1,8 +1,11 @@
 /*
  * Copyright mcidclan, m-c/d 2026
  */
-#include "main.h"
-#include <vme-ext.h>
+#include <pspctrl.h>
+#include <pspdisplay.h>
+#include <pspkernel.h>
+#include <psppower.h>
+#include <me-core-mapper/me-core.h>
 
 PSP_MODULE_INFO("vme-vm-batch-2", 0, 1, 1);
 PSP_HEAP_SIZE_KB(-1024);
@@ -29,45 +32,33 @@ volatile u32 __attribute__((aligned(64))) sharedMat[16] = {
   0x00000000, 0x00000000, 0x00007FFF, 0x00000000,
   0x00000000, 0x00000000, 0x00000000, 0x00007FFF,
   
-  //0x01, 0x00, 0x00, 0x00,
-  //0x00, 0x01, 0x00, 0x00,
-  //0x00, 0x00, 0x01, 0x00,
-  //0x00, 0x00, 0x00, 0x01,
+  /*
+  0x01, 0x00, 0x00, 0x00,
+  0x00, 0x01, 0x00, 0x00,
+  0x00, 0x00, 0x01, 0x00,
+  0x00, 0x00, 0x00, 0x01,
+  */
 };
 
 volatile u32 __attribute__((aligned(64))) sharedVec[VECTOR_BATCH_WORD_COUNT] = {
 
-  0, 0, 0, 0, // lost vector
-
-0x00000001, 0x00000002, 0x00000003, 0x00000004,
-0x00000005, 0x00000000, 0x00000000, 0x00000001,
-0x00000000, 0x00000005, 0x00000000, 0x00000001,
-0x0000000A, 0x0000000A, 0x00000001, 0x00000001,
-0xFFFFFFFD, 0x00000004, 0x00000002, 0x00000001,
-0x00000007, 0xFFFFFFFE, 0x00000005, 0x00000001,
-0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000001,
-
-0x00000064, 0x00000000, 0x00000000, 0x00000001,
-0x00000000, 0xFFFFFFCE, 0x00000000, 0x00000001,
-0x00000008, 0x00000008, 0x00000008, 0x00000001,
-0xFFFFFFEC, 0x0000000F, 0x00000003, 0x00000001,
-0x00000002, 0x00000002, 0x00000002, 0x00000002,
-0x00000000, 0x00000000, 0x00000000, 0x00000001,
-0xFFFFFF9C, 0xFFFFFF9C, 0x0000000A, 0x00000001,
-0x00000032, 0xFFFFFFE7, 0x00000007, 0x00000001,
-
-
-  /*
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-  0x01, 0x02, 0x03, 0x04,
-
-  0x05, 0x06, 0x07, 0x08,
-  0x05, 0x06, 0x07, 0x08,
-  0x05, 0x06, 0x07, 0x08,
-  0x05, 0x06, 0x07, 0x08,
-  */
+  0x00000001, 0x00000002, 0x00000003, 0x00000004,
+  0x00000005, 0x00000000, 0x00000000, 0x00000001,
+  0x00000000, 0x00000005, 0x00000000, 0x00000001,
+  0x0000000A, 0x0000000A, 0x00000001, 0x00000001,
+  0xFFFFFFFD, 0x00000004, 0x00000002, 0x00000001,
+  0x00000007, 0xFFFFFFFE, 0x00000005, 0x00000001,
+  0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000001,
+  0x00000064, 0x00000000, 0x00000000, 0x00000001,
+  
+  0x00000000, 0xFFFFFFCE, 0x00000000, 0x00000001,
+  0x00000008, 0x00000008, 0x00000008, 0x00000001,
+  0xFFFFFFEC, 0x0000000F, 0x00000003, 0x00000001,
+  0x00000002, 0x00000002, 0x00000002, 0x00000002,
+  0x00000000, 0x00000000, 0x00000000, 0x00000001,
+  0xFFFFFF9C, 0xFFFFFF9C, 0x0000000A, 0x00000001,
+  0x00000032, 0xFFFFFFE7, 0x00000007, 0x00000001,
+  0x00000001, 0x00000002, 0x00000003, 0x00000004,
 };
 
 volatile u32 __attribute__((aligned(64))) sharedRes[VECTOR_BATCH_WORD_COUNT] = {0};
@@ -104,11 +95,17 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
     vme_pe2(agu_top(FORMAT_0), VME_RING_TOKEN);
   }
   
-  const int count = (VECTOR_COUNT * 16 - 1);
+  const int lostVector = 1;
+  const int count = ((lostVector + VECTOR_COUNT) * 16 - 1);
   
-  vme_pe1(agu_top(MODE), VME_DEF_MODE);
-  vme_pe1(agu_top(COUNT), VME_DEF_STEP, count);
-
+  // AGU 'Read' for the batch of vectors
+  {
+    const int lostCycles = 16 * lostVector;
+    const int offset = (0x10000 - lostCycles) & 0xfffff;
+    vme_pe1(agu_top(MODE), VME_DEF_MODE, offset);
+    vme_pe1(agu_top(COUNT), VME_DEF_STEP, count);
+  }
+  
   const int lostCycles = 12;
   
   // AGUs 'Write'
@@ -163,10 +160,11 @@ static void uploadBatchOfVectors(void* const src, u32 dst, int count) {
   meCoreDMACPrimWaitTransferFinish();
 }
 
-void downloadBatchOfVectors(u32 src, void* const dst, int count) {
+void downloadBatchOfVectors(void* const dst, int count) {
   
   vme_dma(MEMORY, ADDR, useg_mem((u32)dst));
-    
+
+  const u32 src = VME_BASE_BUFF3_WOFF + VECTOR_MAC_WORD_COUNT;
   vme_dma(SPAD, OFFSET, src + 3);
   vme_dma(ITERATION, DIMS, (count - 1), (4 - 1));
   vme_dma(ITERATION, STEP, 4);
@@ -193,7 +191,6 @@ void meLibOnProcess(void) {
   uploadBatchOfVectors((void*)sharedVec, VME_TOP_BUFF1_WOFF, VECTOR_BATCH_WORD_COUNT);
   vmeLibDisable();
 
-  const int lostVector = 1;
   while (1) {
 
     vmeLibEnable();
@@ -204,8 +201,7 @@ void meLibOnProcess(void) {
     if (meCoreHwMutexTryLock() >= 0) {
 
       meCoreBusClockEnableDMACPrimMux();
-      const u32 src = VME_BASE_BUFF3_WOFF + lostVector * VECTOR_MAC_WORD_COUNT;
-      downloadBatchOfVectors(src, (void*)sharedRes, VECTOR_BATCH_WORD_COUNT - lostVector);
+      downloadBatchOfVectors((void*)sharedRes, VECTOR_BATCH_WORD_COUNT);
       meCoreBusClockDisableDMACPrimMux();
       meCoreHwMutexUnlock();
     }
