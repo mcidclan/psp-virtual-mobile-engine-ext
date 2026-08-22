@@ -6,9 +6,11 @@ A sample code demonstrating how to multiply a batch of vectors by a 4x4 matrix u
 
 This sample code shows the multiplication of a matrix by a batch of vectors using a unique VME context. However, it comes with some limitations.
 
-Indeed, each line of a 4x4 matrix contains 4 values, and the number of lost cycles when using the staging streams (which preserve precision on 64 bits) is 3. So, the context would need to be written differently to take advantage of this.
+Indeed, the first thing is that each line of a 4x4 matrix contains 4 values, and the number of lost cycles when using the staging streams (which preserve precision on 64 bits) is 3. The context would need to be written differently to take advantage of this.
 
-So for now, the solution here is to force the write over the scratchpad, which loses the 64-bit precision, some cycles, and forces us to use an appropriate format like Q1.15.
+On the other hand, the trick to cancel the accumulation on each line requires a write to the scratchpad, with the purpose of realigning the staged data with itself so the subtraction can be computed, since the two streams coming from the same staging are subtracted from each other with an offset of 4.
+
+For now, the solution requires the VME to write over the scratchpad between process elements, which loses the 64-bit precision, costs some cycles, and forces us to use an appropriate format like Q1.15.
 
 ### Usage
 
