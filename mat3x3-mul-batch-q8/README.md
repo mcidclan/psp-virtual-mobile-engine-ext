@@ -2,6 +2,8 @@
 
 A sample code demonstrating how to multiply a batch of vectors by a 3x3 matrix using the Virtual Mobile Engine through a single context.
 
+In this sample, a 3x3 matrix is multiplied by a batch of vectors using the Q8 format, with a value range from -128.0f to 127.0f.
+
 ### Usage
 
 Use Home to exit
