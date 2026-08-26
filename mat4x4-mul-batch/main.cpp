@@ -19,7 +19,6 @@ ME_LIB_SETUP_SIMPLE_SUSPEND_HANDLER();
 
 meLibSetSharedUncached32(10);
 #define meCounter    (meLibSharedMemory[1])
-#define sharedIdx    (meLibSharedMemory[2])
 
 volatile const u32 __attribute__((aligned(64))) cancelMask[4] = {
   0, 0, 0xffffffff, 0
@@ -77,8 +76,8 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   // VMAC between 4x4 matrix and vectors
   vme_pe0(vme_fu(PRIMARY), vme_mux(TOP_0, TOP_1), 0x240 << 12); // staging 0
 
-  // AGU 'Read' for the input matrix
   {
+    // AGU 'Read' for the input matrix
     const int count = (16 - 1);
     vme_pe0(agu_top(MODE), VME_DEF_MODE);
     vme_pe0(agu_top(COUNT), VME_DEF_STEP, count);
@@ -86,8 +85,8 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
     vme_pe0(agu_top(FORMAT_0), VME_RING_TOKEN);
   }
  
-  // AGU 'Read' for the 4 word accumulator cancel mask selector
   {
+    // AGU 'Read' for the 4 word accumulator cancel mask selector
     const int count = (4 - 1);
     vme_pe2(agu_top(MODE), VME_DEF_MODE);
     vme_pe2(agu_top(COUNT), VME_DEF_STEP, count);
@@ -98,8 +97,12 @@ VME_LIB_CONTEXT_BUILDER(setupMulMatCtx, param, {
   const int lostVector = 1;
   const int count = ((lostVector + VECTOR_COUNT) * 16 - 1);
   
-  // AGU 'Read' for the batch of vectors
+  // Note: the lost vector is not necessary when using ICN invalidation. However,
+  // it does not require the VME to clean the interconnect each time, so use one
+  // or the other according to your needs
+  
   {
+    // AGU 'Read' for the batch of vectors
     const int lostCycles = 16 * lostVector;
     const int offset = (0x10000 - lostCycles) & 0xfffff;
     vme_pe1(agu_top(MODE), VME_DEF_MODE, offset);
@@ -219,7 +222,7 @@ void displayVectors() {
   
   const u32* const out = (u32*)(0x40000000 | (u32)sharedRes);
 
-  pspDebugScreenSetXY(0, 0);
+  pspDebugScreenSetXY(0, 2);
   pspDebugScreenPrintf("VME Output Vectors:\n");
   
   pspDebugScreenPrintf("%08lx, %08lx, %08lx, %08lx\n", out[0], out[1], out[2], out[3]);
@@ -256,7 +259,7 @@ int main() {
     
     sceCtrlPeekBufferPositive(&ctl, 1);
     
-    pspDebugScreenSetXY(46, 0);
+    pspDebugScreenSetXY(0, 0);
     pspDebugScreenPrintf("ME Counter: 0x%08lx", meCounter);
     displayVectors();
     
