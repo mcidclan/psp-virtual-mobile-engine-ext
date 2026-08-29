@@ -23,6 +23,11 @@ Make sure you have `psp-media-engine-custom-core` installed and up to date befor
 [texture-processing](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/texture-processin/README.md)  
 [32bits-precision-output](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/2bits-precision-output/README.md)  
 
+
+# Technical Note
+
+This project uses custom code, original work that was not derived from reverse engineering. Please keep in mind that these implementations are based on the author's understanding of the hardware at the time the code was written.
+ 
 ## Contribution Guidelines
 
 ### AI-assisted development
