@@ -12,19 +12,19 @@ Make sure you have `psp-media-engine-custom-core` installed and up to date befor
 
 The following sample code has been written using a PSP Slim, and you will need at least a device of this generation to execute them, since Functional Unit opcodes could differ on older devices such as the Phat.
 
-[fft-dif-16-point-radix-2](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/fft-dif-16-point-radix-2/README.md)  
-[mat4x4-mul-distributed](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/mat4x4-mul-distributed/README.md)  
-[mat4x4-mul-host-batching](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-host-batching/README.md)  
-[mat4x4-mul-reset-acc](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-reset-acc/README.md)  
-[mat4x4-mul-batch](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-batch/README.md)  
-[mat3x3-mul-batch-q8](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat3x3-mul-batch-q8/README.md)  
-[pico-ai](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/pico-ai/README.md)  
-[poc-from-custom-core](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/poc-from-custom-core/README.md)  
-[saturate-clamp-second-fu](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/saturate-clamp-second-fu/README.md)  
-[switching-ram-context](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/switching-ram-context/README.md)  
-[texture-processing](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/texture-processin/README.md)  
-[32bits-precision-output](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/2bits-precision-output/README.md)  
-
+| Sample | Slim | Phat |
+|---|---|---|
+| [mat4x4-mul-distributed](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-distributed/README.md) | ok | todo |
+| [mat4x4-mul-host-batching](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-host-batching/README.md) | ok | todo |
+| [mat4x4-mul-reset-acc](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-reset-acc/README.md) | ok | todo |
+| [mat4x4-mul-batch](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-batch/README.md) | ok | todo |
+| [mat3x3-mul-batch-q8](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat3x3-mul-batch-q8/README.md) | ok | todo |
+| [pico-ai](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/pico-ai/README.md) | ok | todo |
+| [poc-from-custom-core](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/poc-from-custom-core/README.md) | ok | ok |
+| [saturate-clamp-second-fu](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/saturate-clamp-second-fu/README.md) | ok | todo |
+| [switching-ram-context](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/switching-ram-context/README.md) | ok | todo |
+| [texture-processing](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/texture-processing/README.md) | ok | todo |
+| [32bits-precision-output](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/32bits-precision-output/README.md) | ok | todo |
 
 # Technical Note
 
