@@ -10,6 +10,8 @@ Make sure you have `psp-media-engine-custom-core` installed and up to date befor
 
 ## Sample Code
 
+The following sample code has been written using a PSP Slim, and you will need at least a device of this generation to execute them, since Functional Unit opcodes could differ on older devices such as the Phat.
+
 [fft-dif-16-point-radix-2](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/fft-dif-16-point-radix-2/README.md)  
 [mat4x4-mul-distributed](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/tree/main/mat4x4-mul-distributed/README.md)  
 [mat4x4-mul-host-batching](https://github.com/mcidclan/psp-virtual-mobile-engine-ext/blob/main/mat4x4-mul-host-batching/README.md)  
