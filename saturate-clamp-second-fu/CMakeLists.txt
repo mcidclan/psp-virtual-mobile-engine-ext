@@ -17,7 +17,8 @@ target_compile_options(vme PRIVATE
 )
 
 target_link_libraries(vme
-  me-core psppower pspge pspdisplay pspctrl pspdebug
+  me-core me-core-lib vme-lib
+  psppower pspge pspdisplay pspctrl pspdebug
 )
 
 create_pbp_file(TARGET vme TITLE "VME Saturator" BUILD_PRX)

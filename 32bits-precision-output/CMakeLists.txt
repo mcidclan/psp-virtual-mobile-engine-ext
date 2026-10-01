@@ -17,7 +17,8 @@ target_compile_options(vme-acc PRIVATE
 )
 
 target_link_libraries(vme-acc
-  me-core psppower pspge pspdisplay pspctrl pspdebug
+  me-core me-core-lib vme-lib
+  psppower pspge pspdisplay pspctrl pspdebug
 )
 
 create_pbp_file(TARGET vme-acc TITLE "MAC, 32-bit Output" BUILD_PRX)

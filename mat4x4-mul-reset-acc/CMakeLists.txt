@@ -17,7 +17,8 @@ target_compile_options(vme-mat PRIVATE
 )
 
 target_link_libraries(vme-mat
-  me-core psppower pspge pspdisplay pspctrl pspdebug
+  me-core me-core-lib vme-lib
+  psppower pspge pspdisplay pspctrl pspdebug
 )
 
 create_pbp_file(TARGET vme-mat TITLE "Mat4x4 Mult by Vector, Reset Acc" BUILD_PRX)

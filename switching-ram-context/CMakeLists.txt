@@ -17,7 +17,8 @@ target_compile_options(vme-ctx PRIVATE
 )
 
 target_link_libraries(vme-ctx
-  me-core psppower pspge pspdisplay pspctrl pspdebug
+  me-core me-core-lib vme-lib
+  psppower pspge pspdisplay pspctrl pspdebug
 )
 
 create_pbp_file(TARGET vme-ctx TITLE "Switch RAM Context" BUILD_PRX)
